@@ -1,9 +1,12 @@
+# ------------------------------------------------------------
 # from http://home.ubalt.edu/ntsbarsh/opre640a/partIII.htm
 
 using JuMP, HiGHS
 using ACSets
 
+# ------------------------------------------------------------
 # the transportation problem
+
 TransSch = BasicSchema(
     [:Warehouse,:Customer,:Edge], 
     [
@@ -69,3 +72,78 @@ end
 
 # same as online
 shipped_vals = [value(shipped[only(incident_mult(transdat, (w,c), (:src,:tgt)))]) for w=parts(transdat, :Warehouse), c=parts(transdat, :Customer)]
+
+objective_value(transjump)
+
+
+# ------------------------------------------------------------
+# the assignment problem
+
+# please note that the structure of this problem is such that we could have reused the schema
+# from the transportation problem, but we make another schema so that the names match nicely
+
+AssignSch = BasicSchema(
+    [:Applicant,:Job,:Assignment], 
+    [
+        (:applicant,:Assignment,:Applicant),
+        (:job,:Assignment,:Job)
+    ], 
+    [:NumAttr], 
+    [
+        (:cost,:Assignment,:NumAttr)
+    ]
+)
+
+@acset_type AssignData(AssignSch, index = [:applicant,:job])
+
+assigndat = @acset AssignData{Int} begin
+    Applicant = 5
+    Job = 5
+    Assignment = 25
+    applicant = vcat([fill(i,5) for i in 1:5]...)
+    job = repeat(1:5, 5)
+    cost = [
+        10,4,6,10,12,
+        11,7,7,9,14,
+        13,8,12,14,15,
+        14,16,13,17,17,
+        19,11,17,20,19
+    ]
+end
+
+# the jump model
+assignjump = JuMP.Model(HiGHS.Optimizer)
+
+# decision variable is assignment of applicants to jobs
+@variable(
+    assignjump, 
+    assignment[parts(assigndat, :Assignment)],
+    Bin
+)
+
+# each applicant can only be assigned one job
+@constraint(
+    assignjump,
+    one_job[a=parts(assigndat, :Applicant)],
+    sum(assignment[incident(assigndat, a, :applicant)]) == 1
+)
+
+# each job can only be assigned one applicant
+@constraint(
+    assignjump,
+    one_applicant[j=parts(assigndat, :Job)],
+    sum(assignment[incident(assigndat, j, :job)]) == 1
+)
+
+# minimize cost
+@objective(
+    assignjump,
+    Min,
+    sum(assignment[a] * assigndat[a,:cost] for a in parts(assigndat, :Assignment))
+)
+
+optimize!(assignjump)
+
+# check it
+assignment_vals = [value(assignment[only(incident_mult(assigndat, (a,j), (:applicant,:job)))]) for a=parts(assigndat, :Applicant), j=parts(assigndat, :Job)]
+objective_value(assignjump)
