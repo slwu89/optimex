@@ -147,3 +147,69 @@ optimize!(assignjump)
 # check it
 assignment_vals = [value(assignment[only(incident_mult(assigndat, (a,j), (:applicant,:job)))]) for a=parts(assigndat, :Applicant), j=parts(assigndat, :Job)]
 objective_value(assignjump)
+
+
+# ------------------------------------------------------------
+# shortest path problem
+
+PathSch = BasicSchema(
+    [:Node,:Edge],
+    [
+        (:src,:Edge,:Node),
+        (:tgt,:Edge,:Node)
+    ],
+    [:NumAttr],
+    [(:cost,:Edge,:NumAttr)]
+)
+
+@acset_type PathData(PathSch, index=[:src,:tgt])
+
+pathdat = @acset PathData{Int} begin
+    Node=7
+    Edge=10
+    src=[1,1,2,2,3,3,4,4,5,6]
+    tgt=[2,3,4,7,2,5,5,7,6,7]
+    cost=[15,10,6,17,8,4,4,5,2,6]
+end
+
+# the jump model
+pathjump = JuMP.Model(HiGHS.Optimizer)
+
+# decision variable is assignment of applicants to jobs
+@variable(
+    pathjump, 
+    edge[parts(pathdat, :Edge)],
+    Bin
+)
+
+# origin constraint
+@constraint(
+    pathjump,
+    sum(edge[incident(pathdat, 1, :src)]) == 1
+)
+
+# destination constraint
+@constraint(
+    pathjump,
+    sum(edge[incident(pathdat, 7, :tgt)]) == 1
+)
+
+# intermediate node constraints (if enter a node, must leave)
+@constraint(
+    pathjump,
+    intermediate[n=parts(pathdat,:Node)[2:end-1]],
+    sum(edge[incident(pathdat, n, :tgt)]) - sum(edge[incident(pathdat, n, :src)]) == 0
+)
+
+# minimize costs
+@objective(
+    pathjump,
+    Min,
+    sum(edge[n] * pathdat[n,:cost] for n in parts(pathdat,:Node))
+)
+
+optimize!(pathjump)
+
+objective_value(pathjump)
+
+filter(x->!isnothing(x), [value(edge[i]) == 0 ? nothing : [pathdat[i,:src];pathdat[i,:tgt]]  for i in eachindex(edge)])
