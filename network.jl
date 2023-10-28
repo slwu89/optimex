@@ -3,6 +3,7 @@
 
 using JuMP, HiGHS
 using ACSets
+using Catlab
 
 # ------------------------------------------------------------
 # the transportation problem
@@ -213,3 +214,81 @@ optimize!(pathjump)
 objective_value(pathjump)
 
 filter(x->!isnothing(x), [value(edge[i]) == 0 ? nothing : [pathdat[i,:src];pathdat[i,:tgt]]  for i in eachindex(edge)])
+
+
+# ------------------------------------------------------------
+# maximum flow problem
+
+FlowSch = BasicSchema(
+    [:Node,:Edge],
+    [
+        (:src,:Edge,:Node),
+        (:tgt,:Edge,:Node)
+    ],
+    [:NumAttr],
+    [(:capacity,:Edge,:NumAttr)]
+)
+
+@acset_type FlowData(FlowSch, index=[:src,:tgt])
+
+flowdat = @acset FlowData{Int} begin
+    Node=7
+    Edge=16
+    src=[1,1,2,3,2,2,3,6,3,4,6,6,5,4,6,5]
+    tgt=[2,3,3,2,4,6,6,3,5,6,4,5,6,7,7,7]
+    capacity=[10,10,1,1,8,6,4,4,12,3,3,2,2,7,2,8]
+end
+
+# the jump model
+flowjump = JuMP.Model(HiGHS.Optimizer)
+
+# decision variable is the maximum flow to send through the system
+@variable(
+    flowjump, 
+    F >= 0
+)
+
+# another dv is the flow along each edge
+@variable(
+    flowjump,
+    0 <= flow[e=parts(flowdat,:Edge)] <= flowdat[e,:capacity]
+)
+
+# origin constraint
+@constraint(
+    flowjump,
+    origin,
+    sum(flow[incident(flowdat, 1, :src)]) - F == 0
+)
+
+# intermediate constraints (inflow - outflow = 0)
+@constraint(
+    flowjump,
+    intermediate[n=parts(flowdat,:Node)[2:end-1]],
+    sum(flow[incident(flowdat, n, :tgt)]) - sum(flow[incident(flowdat, n, :src)]) == 0
+)
+
+# destination constraint
+@constraint(
+    flowjump,
+    sum(flow[incident(flowdat, nparts(flowdat,:Node), :tgt)]) - F == 0
+)
+
+# maximize flow
+@objective(
+    flowjump,
+    Max,
+    F
+)
+
+optimize!(flowjump)
+
+value(F)
+value.(flow)
+
+g = Catlab.DiagrammaticPrograms.NamedGraph{Int,Int}()
+
+add_parts!(g, :V, nparts(flowdat,:Node), vname=collect(parts(flowdat,:Node)))
+add_parts!(g, :E, nparts(flowdat,:Edge), src=subpart(flowdat,:src), tgt=subpart(flowdat,:tgt), ename=Int.(value.(flow)))
+
+to_graphviz(g, node_labels=:vname, edge_labels=:ename)
