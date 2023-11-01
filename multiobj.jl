@@ -125,3 +125,73 @@ optimize!(jumpmod)
 value.(diamonds)
 sum(value.(diamonds))
 value(d5_p)
+
+
+# ------------------------------------------------------------
+# goal prog: blending
+# from https://link.springer.com/book/10.1007/978-3-642-31054-6
+
+# this problem is so simple that we do not even bother with a data structure
+
+prices = [5,3,2]
+
+jumpmod = JuMP.Model(HiGHS.Optimizer)
+
+@variable(
+    jumpmod,
+    ingredients[1:3] >= 0
+)
+
+# "hard" constraint 1: at least 100 lbs of blend must be produced
+@constraint(
+    jumpmod,
+    sum(ingredients) >= 100
+)
+
+# "Hard" constraint 2: average cost of blend per pound should not exceed $2.8
+@constraint(
+    jumpmod,
+    sum(prices .* ingredients) <= 2.8 * sum(ingredients)
+)
+
+# "desirable" constraint 1: at least 20% of blend is I1
+@variables(
+    jumpmod,
+    begin
+        d1_n >= 0
+        d1_p >= 0
+    end
+)
+
+jumpmod[:soft_con1] = @constraint(
+    jumpmod,
+    ingredients[1] + d1_n - d1_p == 0.2 * sum(ingredients)
+)
+
+# "desirable" constraint 2: no more than 50% of blend is I3 (1/2 as important as first desirable con)
+@variables(
+    jumpmod,
+    begin
+        d2_n >= 0
+        d2_p >= 0
+    end
+)
+
+jumpmod[:soft_con2] = @constraint(
+    jumpmod,
+    ingredients[3] + d2_n - d2_p == 0.5 * sum(ingredients)
+)
+
+# obj
+@objective(
+    jumpmod,
+    Min,
+    2*d1_n + d2_p
+)
+
+# solve it!
+optimize!(jumpmod)
+
+value.(ingredients)
+
+sum(prices .* value.(ingredients)) / sum(value.(ingredients))
