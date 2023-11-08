@@ -289,6 +289,15 @@ value.(flow)
 g = Catlab.DiagrammaticPrograms.NamedGraph{Int,Int}()
 
 add_parts!(g, :V, nparts(flowdat,:Node), vname=collect(parts(flowdat,:Node)))
-add_parts!(g, :E, nparts(flowdat,:Edge), src=subpart(flowdat,:src), tgt=subpart(flowdat,:tgt), ename=Int.(value.(flow)))
+for e in parts(flowdat, :Edge)
+    eflow = Int(value(flow[e]))
+    if eflow > 0
+        add_part!(g, :E, src=flowdat[e,:src], tgt=flowdat[e,:tgt], ename=eflow)
+    end    
+end
 
 to_graphviz(g, node_labels=:vname, edge_labels=:ename)
+
+
+# ------------------------------------------------------------
+# project plan problem
