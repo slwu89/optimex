@@ -83,10 +83,41 @@ ijklm = DataFrames.innerjoin(
 )
 
 # build model
-# model = Model(Gurobi.Optimizer)
-# set_silent(model)
-# ijklm[!, :x] = @variable(model, x[1:size(ijklm, 1)] >= 0)
-# for df in DataFrames.groupby(ijklm, :i)
-#     @constraint(model, sum(df.x) >= 0)
-# end
+model = JuMP.Model()
+set_silent(model)
+ijklm[!, :x] = @variable(model, x[1:size(ijklm, 1)] >= 0)
+for df in DataFrames.groupby(ijklm, :i)
+    @constraint(model, sum(df.x) >= 0)
+end
 # optimize!(model)
+
+# ------------------
+# the acsets version
+
+using ACSets
+
+
+IJKLMSch = BasicSchema(
+    [:I,:J,:K,:L,:M,:IJK,:JKL,:KLM], 
+    [
+        (:IJK_I,:IJK,:I),
+        (:IJK_J,:IJK,:J),
+        (:IJK_K,:IJK,:K),
+        (:JKL_J,:JKL,:J),
+        (:JKL_K,:JKL,:K),
+        (:JKL_L,:JKL,:L),
+        (:KLM_K,:KLM,:K),
+        (:KLM_L,:KLM,:L),
+        (:KLM_M,:KLM,:M)
+    ], 
+    [:IntAttr], 
+    [
+        (:value_ijk,:IJK,:IntAttr),
+        (:value_jkl,:JKL,:IntAttr),
+        (:value_klm,:KLM,:IntAttr)
+    ]
+)
+
+@acset_type IJKLMData(IJKLMSch, index=[:IJK_I,:IJK_J,:IJK_K,:JKL_J,:JKL_K,:JKL_L,:KLM_K,:KLM_L,:KLM_M])
+
+ijklm_dat = IJKLMData{Int}()
