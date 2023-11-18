@@ -6,6 +6,7 @@
 
 using DataFrames
 using Distributions
+using BenchmarkTools
 
 SampleBinomialVec = function(A,B,C,p=0.05)
     vec = rand(Binomial(1, p), length(A) * length(B) * length(C))
@@ -50,20 +51,23 @@ using JuMP, HiGHS
 
 # -----------------------------------------------
 # the "intuitive" formulation --- the one to beat
-x_list = [
-    (i, j, k, l, m)
-    for (i, j, k) in IJK_sparse
-    for (jj, kk, l) in JKL_sparse if jj == j && kk == k
-    for (kkk, ll, m) in KLM_sparse if kkk == k && ll == l
-]
-model = Model(HiGHS.Optimizer)
-@variable(model, x[x_list] >= 0)
-@constraint(
-    model,
-    [i in I], 
-    sum(x[k] for k in x_list if k[1] == i) >= 0
-)
-optimize!(model)
+@benchmark let 
+    x_list = [
+        (i, j, k, l, m)
+        for (i, j, k) in IJK_sparse
+        for (jj, kk, l) in JKL_sparse if jj == j && kk == k
+        for (kkk, ll, m) in KLM_sparse if kkk == k && ll == l
+    ]
+    model = Model(HiGHS.Optimizer)
+    set_silent(model)
+    @variable(model, x[x_list] >= 0)
+    @constraint(
+        model,
+        [i in I], 
+        sum(x[k] for k in x_list if k[1] == i) >= 0
+    )
+    optimize!(model)
+end
 
 # ----------------------
 # the DataFrames version
@@ -95,7 +99,6 @@ end
 # the acsets version
 
 using ACSets
-using Catlab # manipulate finite sets
 
 IJKLMSch = BasicSchema(
     [:I,:J,:K,:L,:M,:IJK,:JKL,:KLM], 

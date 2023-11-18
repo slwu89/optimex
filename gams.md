@@ -1,0 +1,164 @@
+# IJKLM model
+Sean L. Wu
+2023-11-13
+
+## The IJKLM model
+
+An (in)famous [Julia Discourse
+thread](https://discourse.julialang.org/t/performance-julia-jump-vs-python-pyomo/92044)
+once asked how to make model building in JuMP faster compared to other
+platforms (Pyomo, and I guess GAMS). This turned into a [blog post by
+GAMS](https://www.gams.com/blog/2023/07/performance-in-optimization-models-a-comparative-analysis-of-gams-pyomo-gurobipy-and-jump/),
+a company which produces a modeling language that plugs into various
+commercial and open source solvers. The original formulation of the JuMP
+model showed very bad performance, but that was due to the way the
+author (employee of GAMS) was using Julia, rather than anything JuMP
+specific. The JuMP dev team responded with their own [blog post on the
+JuMP website](https://jump.dev/2023/07/20/gams-blog/), which was
+announced on a [Discourse
+thread](https://discourse.julialang.org/t/jump-developers-response-to-benchmarks-by-gams/101920).
+They used a DataFrames.jl based solution that was very fast.
+
+The backstory is filled with intrigue, no doubt, but I’m interested to
+see if acsets can provide an alterative way to generate this model. The
+original data is reproducible at
+[justine18/performance_experiment](https://github.com/justine18/performance_experiment),
+but I decided to just redo it in Julia as the writing/reading to/from
+JSON files is a pain in the butt.
+
+By the way, the model is given as:
+
+$$\text{min} \ z = 1$$
+
+$$\sum_{(j,k):(i,j,k) \in \mathcal{IJK}} \ \sum_{l:(j,k,l) \in \mathcal{JKL}} \ \sum_{m:(k,l,m) \in \mathcal{KLM}} x_{i,j,k,l,m} \ge 0 \hspace{1cm} \forall \ i \in \mathcal{I}$$
+
+$$x_{i,j,k,l,m} \ge 0 \hspace{1cm} \forall \ (i,j,k) \in \mathcal{IJK}, l:(j,k,l) \in \mathcal{JKL}, m:(k,l,m) \in \mathcal{KLM} $$
+
+The blog post calls subsets of Cartesian products “maps”, which seems to
+be confused as a “map” is generally understood to be a function in math.
+General subsets of products are known as “relations”.
+
+## Data generation
+
+First we load some packages we’ll need. `DataFrames` for dataframes,
+`Distributions` for sampling binomial random variates, `JuMP` to set up
+the model, `HiGHS` for a solver. `ACSets` are used as an alternative
+data structure for the model, and `Catlab` is just needed to plot the
+database schema (finite presentation of a category) used to represent
+the data.
+
+``` julia
+using DataFrames
+using Distributions
+using JuMP, HiGHS
+using ACSets, Catlab
+using BenchmarkTools
+```
+
+We first generate synthetic “data”. This should follow the data
+generation as I understand it from the original repo. The probability of
+all zeros with the given model sizes is incomprehensibly small but I
+added a check for it anyway. Who knows.
+
+``` julia
+SampleBinomialVec = function(A,B,C,p=0.05)
+    vec = rand(Binomial(1, p), length(A) * length(B) * length(C))
+    while sum(vec) == 0
+        vec = rand(Binomial(1, p), length(A) * length(B) * length(C))
+    end
+    return vec
+end
+
+n=100 # something large
+m=20 # 20
+
+# Sets IJKLM 
+I = ["i$x" for x in 1:n]
+J = ["j$x" for x in 1:m]
+K = ["k$x" for x in 1:m]
+L = ["l$x" for x in 1:m]
+M = ["m$x" for x in 1:m]
+
+# make IJK
+IJK = DataFrame(Iterators.product(I,J,K))
+rename!(IJK, [:i,:j,:k])
+IJK.value = SampleBinomialVec(I,J,K)
+
+# make JKL
+JKL = DataFrame(Iterators.product(J,K,L))
+rename!(JKL, [:j,:k,:l])
+JKL.value = SampleBinomialVec(J,K,L)
+
+# make KLM
+KLM = DataFrame(Iterators.product(K,L,M))
+rename!(KLM, [:k,:l,:m])
+KLM.value = SampleBinomialVec(K,L,M)
+
+# make the products just general sparse relations
+IJK_sparse = [(x.i, x.j, x.k) for x in eachrow(IJK) if x.value == true]
+JKL_sparse = [(x.j, x.k, x.l) for x in eachrow(JKL) if x.value == true]
+KLM_sparse = [(x.k, x.l, x.m) for x in eachrow(KLM) if x.value == true]
+```
+
+    427-element Vector{Tuple{String, String, String}}:
+     ("k11", "l1", "m1")
+     ("k7", "l2", "m1")
+     ("k3", "l4", "m1")
+     ("k16", "l5", "m1")
+     ("k15", "l7", "m1")
+     ("k19", "l8", "m1")
+     ("k18", "l9", "m1")
+     ("k18", "l11", "m1")
+     ("k20", "l11", "m1")
+     ("k8", "l12", "m1")
+     ("k19", "l13", "m1")
+     ("k9", "l14", "m1")
+     ("k5", "l15", "m1")
+     ⋮
+     ("k4", "l10", "m20")
+     ("k19", "l10", "m20")
+     ("k18", "l11", "m20")
+     ("k14", "l12", "m20")
+     ("k19", "l12", "m20")
+     ("k8", "l13", "m20")
+     ("k17", "l13", "m20")
+     ("k6", "l16", "m20")
+     ("k15", "l16", "m20")
+     ("k3", "l18", "m20")
+     ("k5", "l20", "m20")
+     ("k13", "l20", "m20")
+
+## The “intuitive” formulation
+
+As we know this is the slow one.
+
+``` julia
+@benchmark let 
+    x_list = [
+        (i, j, k, l, m)
+        for (i, j, k) in IJK_sparse
+        for (jj, kk, l) in JKL_sparse if jj == j && kk == k
+        for (kkk, ll, m) in KLM_sparse if kkk == k && ll == l
+    ]
+    model = JuMP.Model(HiGHS.Optimizer)
+    set_silent(model)
+    @variable(model, x[x_list] >= 0)
+    @constraint(
+        model,
+        [i in I], 
+        sum(x[k] for k in x_list if k[1] == i) >= 0
+    )
+    optimize!(model)
+end
+```
+
+    BenchmarkTools.Trial: 156 samples with 1 evaluation.
+     Range (min … max):  31.636 ms …  35.081 ms  ┊ GC (min … max): 11.51% … 12.46%
+     Time  (median):     32.097 ms               ┊ GC (median):    11.92%
+     Time  (mean ± σ):   32.146 ms ± 401.444 μs  ┊ GC (mean ± σ):  11.93% ±  0.32%
+
+           ▃ ▂ ▄▅  ▃▅▂▅▃█▄▂     ▂                                   
+      ▃▃▃▇▅█▇█▆███▇████████▇▆█▅▁█▃▆▁▅▃▁▃▅▃▁▁▁▁▁▁▁▁▆▁▃▁▁▁▁▁▁▁▁▁▁▁▁▃ ▃
+      31.6 ms         Histogram: frequency by time         33.3 ms <
+
+     Memory estimate: 87.66 MiB, allocs estimate: 1863112.
