@@ -33,7 +33,7 @@ using DataFrames
 using Distributions
 using JuMP, HiGHS
 using ACSets, Catlab
-using BenchmarkTools
+using BenchmarkTools, MarkdownTables
 ```
 
 We first generate synthetic "data". This should follow the data generation as I understand it from the original repo. The probability of all zeros with the given model sizes is incomprehensibly small but I added a check for it anyway. Who knows.
@@ -122,8 +122,6 @@ ijklm_df = DataFrames.innerjoin(
     KLM_sparse_df;
     on = [:k, :l],
 )
-
-ijklm_df
 ```
 
 Let's benchmark it.
@@ -147,7 +145,7 @@ end
 
 ## The acsets version
 
-Acsets (Attributed C-Sets) are a nifty data structure coming from applied category theory, but its not too far off to think of them just as in-memory relational databases. They are provided in the [ACSets.jl](https://github.com/AlgebraicJulia/ACSets.jl) library.
+Acsets (Attributed C-Sets) are a nifty data structure coming from applied category theory, but its not too far off to think of them just as in-memory relational databases. They are provided in the [ACSets.jl](https://github.com/AlgebraicJulia/ACSets.jl) library. One of the advantages of using acsets and categorical machinery in general is that they have a natural graphical presentation, which in many cases is very readable and illuminating.
 
 We use `BasicSchema` to make a schema for the acset which will store the data. Note that `Catlab.jl` provides a much nicer macro `@present` for this, but we try to use as much as possible only the bare bones API from ACSets to avoid introducing too many category theoretic concepts. For us, it's just a database schema.
 
@@ -277,10 +275,17 @@ Catlab.to_graphviz(connected_paths_query, box_labels=:name, junction_labels=:var
 
 While the blog post should be consulted for a complete explanation, the conjunctive query is expressed using an undirected wiring diagram (UWD) which is visualized using Catlab. Nodes (labeled ovals) in the UWD correspond to tables (primary keys) in the acset. Junctions (labeled dots) correspond to variables. Ports, which are unlabed in this graphical depiction, are where wires connect junctions to nodes. These correspond to columns of the table they are connected to. Outer ports, which are wires that run "off the page", are the columns of the table that will be returned as the result of the query. The rows that are returned from the query come from filtering the Cartesian product of the tables (nodes) such that variables in columns match according to ports that share a junction. In this case, it is equivalent to the two inner joins as done above using DataFrames.
 
-The query is evaluated on the acset by computing its limit, which is a kind of generalization of meet. We can confirm that both the acsets and data frame methods get the same result:
+The JuMP blog post notes that while the data frames version doesn't resemble the nested summation it is arguably just as readable, especially if the columns were related to the process that was being modeled. I suggest that the acsets version is also just as readable, if not more, as the data schema and query diagram directly represent the data that parameterizes the optimization model.
+
+The query is evaluated on the acset by computing its limit, which is a kind of generalization of meet. We can confirm that both the acsets and data frame methods return the same number of rows, and look at the output.
 
 ```{julia}
-sort(ijklm_df) == sort(query(ijklm_dat, connected_paths_query))
+ijklm_query = query(ijklm_dat, connected_paths_query)
+size(ijklm_query) == size(ijklm_df)
+```
+
+```{julia}
+ijklm_query[1:5,:] |> markdown_table
 ```
 
 Now that we know they are equal, we can go ahead and see how fast the acsets version is.

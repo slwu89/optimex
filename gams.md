@@ -52,7 +52,7 @@ using DataFrames
 using Distributions
 using JuMP, HiGHS
 using ACSets, Catlab
-using BenchmarkTools
+using BenchmarkTools, MarkdownTables
 ```
 
 We first generate synthetic “data”. This should follow the data
@@ -124,16 +124,16 @@ As we know this is the slow one.
 end
 ```
 
-    BenchmarkTools.Trial: 179 samples with 1 evaluation.
-     Range (min … max):  25.914 ms … 29.360 ms  ┊ GC (min … max):  9.62% … 20.13%
-     Time  (median):     28.823 ms              ┊ GC (median):    18.49%
-     Time  (mean ± σ):   28.066 ms ±  1.231 ms  ┊ GC (mean ± σ):  16.48% ±  3.54%
+    BenchmarkTools.Trial: 186 samples with 1 evaluation.
+     Range (min … max):  23.743 ms … 38.693 ms  ┊ GC (min … max):  9.12% … 14.37%
+     Time  (median):     26.484 ms              ┊ GC (median):    15.91%
+     Time  (mean ± σ):   26.893 ms ±  2.144 ms  ┊ GC (mean ± σ):  14.39% ±  3.07%
 
-                                                        ▄▆█        
-      ▂▂▁▃▇█▆▅▃▃▃▂▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂███▇▅▄▄▄▃ ▂
-      25.9 ms         Histogram: frequency by time        29.3 ms <
+                 ▂█▃▂▁                                             
+      ▇▆▇▃▇▄▃▄▅█▇█████▅▅█▅▇▄▄██▆▄▃▄▄▄▃▄▄▁▄▃▁▁▁▁▁▁▄▁▁▁▁▁▁▁▁▁▁▁▁▃▁▃ ▃
+      23.7 ms         Histogram: frequency by time        34.9 ms <
 
-     Memory estimate: 73.64 MiB, allocs estimate: 1560849.
+     Memory estimate: 74.22 MiB, allocs estimate: 1583533.
 
 ## The DataFrames version
 
@@ -154,8 +154,6 @@ ijklm_df = DataFrames.innerjoin(
     KLM_sparse_df;
     on = [:k, :l],
 )
-
-ijklm_df
 ```
 
 Let’s benchmark it.
@@ -177,23 +175,26 @@ Let’s benchmark it.
 end
 ```
 
-    BenchmarkTools.Trial: 1470 samples with 1 evaluation.
-     Range (min … max):  2.962 ms … 8.528 ms  ┊ GC (min … max): 0.00% … 51.20%
-     Time  (median):     3.097 ms             ┊ GC (median):    0.00%
-     Time  (mean ± σ):   3.400 ms ± 1.207 ms  ┊ GC (mean ± σ):  7.22% ± 11.84%
+    BenchmarkTools.Trial: 1455 samples with 1 evaluation.
+     Range (min … max):  2.977 ms … 19.495 ms  ┊ GC (min … max): 0.00% …  0.00%
+     Time  (median):     3.113 ms              ┊ GC (median):    0.00%
+     Time  (mean ± σ):   3.434 ms ±  1.218 ms  ┊ GC (mean ± σ):  5.75% ± 10.17%
 
-      ▆█▅                                                    ▁   
-      ████▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃▃▄███ █
-      2.96 ms     Histogram: log(frequency) by time     8.23 ms <
+      ▇█▅▄▂▁                                                      
+      ███████▆▆▅▃▄▁▁▄▁▁▃▁▄▁▁▁▁▃▁▁▁▁▁▁▁▁▁▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▃▆▆██▆▇▆ █
+      2.98 ms      Histogram: log(frequency) by time      8.4 ms <
 
-     Memory estimate: 2.68 MiB, allocs estimate: 22931.
+     Memory estimate: 2.36 MiB, allocs estimate: 21719.
 
 ## The acsets version
 
 Acsets (Attributed C-Sets) are a nifty data structure coming from
 applied category theory, but its not too far off to think of them just
 as in-memory relational databases. They are provided in the
-[ACSets.jl](https://github.com/AlgebraicJulia/ACSets.jl) library.
+[ACSets.jl](https://github.com/AlgebraicJulia/ACSets.jl) library. One of
+the advantages of using acsets and categorical machinery in general is
+that they have a natural graphical presentation, which in many cases is
+very readable and illuminating.
 
 We use `BasicSchema` to make a schema for the acset which will store the
 data. Note that `Catlab.jl` provides a much nicer macro `@present` for
@@ -358,15 +359,36 @@ tables (nodes) such that variables in columns match according to ports
 that share a junction. In this case, it is equivalent to the two inner
 joins as done above using DataFrames.
 
+The JuMP blog post notes that while the data frames version doesn’t
+resemble the nested summation it is arguably just as readable,
+especially if the columns were related to the process that was being
+modeled. I suggest that the acsets version is also just as readable, if
+not more, as the data schema and query diagram directly represent the
+data that parameterizes the optimization model.
+
 The query is evaluated on the acset by computing its limit, which is a
 kind of generalization of meet. We can confirm that both the acsets and
-data frame methods get the same result:
+data frame methods return the same number of rows, and look at the
+output.
 
 ``` julia
-sort(ijklm_df) == sort(query(ijklm_dat, connected_paths_query))
+ijklm_query = query(ijklm_dat, connected_paths_query)
+size(ijklm_query) == size(ijklm_df)
 ```
 
-    false
+    true
+
+``` julia
+ijklm_query[1:5,:] |> markdown_table
+```
+
+| i   | j   | k   | l   | m   |
+|-----|-----|-----|-----|-----|
+| 16  | 2   | 6   | 15  | 6   |
+| 88  | 17  | 20  | 15  | 13  |
+| 29  | 16  | 6   | 10  | 9   |
+| 10  | 18  | 2   | 11  | 5   |
+| 57  | 18  | 10  | 11  | 15  |
 
 Now that we know they are equal, we can go ahead and see how fast the
 acsets version is.
@@ -384,13 +406,13 @@ acsets version is.
 end
 ```
 
-    BenchmarkTools.Trial: 1332 samples with 1 evaluation.
-     Range (min … max):  3.272 ms … 8.270 ms  ┊ GC (min … max): 0.00% … 47.54%
-     Time  (median):     3.402 ms             ┊ GC (median):    0.00%
-     Time  (mean ± σ):   3.751 ms ± 1.219 ms  ┊ GC (mean ± σ):  7.52% ± 12.30%
+    BenchmarkTools.Trial: 1222 samples with 1 evaluation.
+     Range (min … max):  3.373 ms … 24.939 ms  ┊ GC (min … max): 0.00% … 59.32%
+     Time  (median):     3.544 ms              ┊ GC (median):    0.00%
+     Time  (mean ± σ):   4.088 ms ±  1.624 ms  ┊ GC (mean ± σ):  6.84% ± 11.36%
 
-      ▇█▃ ▂                                                ▁ ▁   
-      ██████▅▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃▁▁▅▇████ █
-      3.27 ms     Histogram: log(frequency) by time     8.15 ms <
+      ▇█▅▅▄▃▂▁▁▁                                                  
+      ██████████▇▆▆▅▅▄▅▆▁▁▄▄▁▅▅▅▁▁▄▁▄▅▁▁▁▁▄▁▁▁▁▁▄▅▄▆▇▇▇██▆▆▆▅▄▄▄ █
+      3.37 ms      Histogram: log(frequency) by time     9.51 ms <
 
-     Memory estimate: 3.38 MiB, allocs estimate: 29260.
+     Memory estimate: 3.00 MiB, allocs estimate: 27923.
