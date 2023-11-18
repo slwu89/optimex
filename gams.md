@@ -100,34 +100,6 @@ JKL_sparse = [(x.j, x.k, x.l) for x in eachrow(JKL) if x.value == true]
 KLM_sparse = [(x.k, x.l, x.m) for x in eachrow(KLM) if x.value == true]
 ```
 
-    415-element Vector{Tuple{String, String, String}}:
-     ("k5", "l2", "m1")
-     ("k2", "l4", "m1")
-     ("k6", "l4", "m1")
-     ("k14", "l4", "m1")
-     ("k16", "l4", "m1")
-     ("k5", "l6", "m1")
-     ("k7", "l8", "m1")
-     ("k9", "l9", "m1")
-     ("k10", "l11", "m1")
-     ("k11", "l11", "m1")
-     ("k9", "l12", "m1")
-     ("k16", "l13", "m1")
-     ("k12", "l14", "m1")
-     ⋮
-     ("k12", "l5", "m20")
-     ("k4", "l7", "m20")
-     ("k5", "l7", "m20")
-     ("k16", "l7", "m20")
-     ("k13", "l8", "m20")
-     ("k19", "l10", "m20")
-     ("k3", "l12", "m20")
-     ("k13", "l14", "m20")
-     ("k12", "l16", "m20")
-     ("k16", "l16", "m20")
-     ("k14", "l17", "m20")
-     ("k5", "l18", "m20")
-
 ## The “intuitive” formulation
 
 As we know this is the slow one.
@@ -152,16 +124,16 @@ As we know this is the slow one.
 end
 ```
 
-    BenchmarkTools.Trial: 182 samples with 1 evaluation.
-     Range (min … max):  24.698 ms … 69.534 ms  ┊ GC (min … max):  6.46% … 31.23%
-     Time  (median):     27.338 ms              ┊ GC (median):    14.67%
-     Time  (mean ± σ):   27.512 ms ±  3.389 ms  ┊ GC (mean ± σ):  13.71% ±  3.05%
+    BenchmarkTools.Trial: 174 samples with 1 evaluation.
+     Range (min … max):  26.144 ms … 33.714 ms  ┊ GC (min … max):  9.58% … 19.06%
+     Time  (median):     28.975 ms              ┊ GC (median):    18.26%
+     Time  (mean ± σ):   28.737 ms ±  1.073 ms  ┊ GC (mean ± σ):  17.24% ±  2.86%
 
-          ▂              ▁▂▅█ ▃▃▂▇      ▂                          
-      ▃▁▁▄█▇█▇▄▄▄▃▄█▃▄▄▅▆████▆████▇█▆▁▄▅█▇▅▃▄▁▃▁▁▁▃▁▁▁▁▁▃▁▁▁▁▁▁▁▃ ▃
-      24.7 ms         Histogram: frequency by time        31.5 ms <
+                                           ▂▇█                     
+      ▃▃▄▅▅▅▃▁▃▃▁▁▁▃▁▁▃▁▁▁▁▁▁▁▃▁▁▁▁▁▁▁▁▁▃▇▆███▇▇▇▆▄▄▃▃▃▄▁▁▁▃▄▁▁▁▃ ▃
+      26.1 ms         Histogram: frequency by time        30.4 ms <
 
-     Memory estimate: 76.35 MiB, allocs estimate: 1618283.
+     Memory estimate: 80.40 MiB, allocs estimate: 1707380.
 
 ## The DataFrames version
 
@@ -199,23 +171,23 @@ ijklm_df = DataFrames.innerjoin(
 end
 ```
 
-    BenchmarkTools.Trial: 1372 samples with 1 evaluation.
-     Range (min … max):  3.171 ms … 10.570 ms  ┊ GC (min … max): 0.00% … 44.47%
-     Time  (median):     3.283 ms              ┊ GC (median):    0.00%
-     Time  (mean ± σ):   3.644 ms ±  1.215 ms  ┊ GC (mean ± σ):  6.60% ± 11.24%
+    BenchmarkTools.Trial: 1436 samples with 1 evaluation.
+     Range (min … max):  3.040 ms … 9.067 ms  ┊ GC (min … max): 0.00% … 48.03%
+     Time  (median):     3.165 ms             ┊ GC (median):    0.00%
+     Time  (mean ± σ):   3.480 ms ± 1.214 ms  ┊ GC (mean ± σ):  7.12% ± 11.79%
 
-      ▇█▄▂▁                                                 ▁     
-      █████▇██▇▆▃▅▅▅▁▃▁▃▃▁▁▁▃▁▁▁▁▃▁▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃▁▅▆██▇▆▆ █
-      3.17 ms      Histogram: log(frequency) by time     8.39 ms <
+      ▇█▅▁                                                  ▁▁   
+      ████▇▄▃▁▄▁▁▁▁▁▁▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▆▇██▇ █
+      3.04 ms     Histogram: log(frequency) by time     8.35 ms <
 
-     Memory estimate: 2.77 MiB, allocs estimate: 24243.
+     Memory estimate: 2.74 MiB, allocs estimate: 23717.
 
 ## The acsets version
 
-For those who don’t know acsets (Attributed C-Sets) are a nifty data
-structure coming from applied category theory, but its not too far off
-to think of them as in-memory relational databases. They are provided in
-the [ACSets.jl](https://github.com/AlgebraicJulia/ACSets.jl) library.
+Acsets (Attributed C-Sets) are a nifty data structure coming from
+applied category theory, but its not too far off to think of them just
+as in-memory relational databases. They are provided in the
+[ACSets.jl](https://github.com/AlgebraicJulia/ACSets.jl) library.
 
 We use `BasicSchema` to make a schema for the acset which will store the
 data. Note that `Catlab.jl` provides a much nicer macro `@present` for
@@ -224,11 +196,18 @@ ACSets to avoid introducing too many category theoretic concepts. For
 us, it’s just a database schema.
 
 The only code from Catlab we need is the line below the schema where we
-display it graphically.
+display it graphically. Note that each “set” has turned into an object
+in the schema, and that the relations are also objects. There are
+projection maps from the relations into the sets which are involved in
+each relation. Each relation also has an arrow into `IntAttr` which will
+store the results of the binomial random draw that is used to “sparsify”
+the data.
 
 ``` julia
 IJKLMSch = BasicSchema(
+    # objects (primary keys)
     [:I,:J,:K,:L,:M,:IJK,:JKL,:KLM], 
+    # homs (foreign keys)
     [
         (:IJK_I,:IJK,:I),
         (:IJK_J,:IJK,:J),
@@ -240,7 +219,9 @@ IJKLMSch = BasicSchema(
         (:KLM_L,:KLM,:L),
         (:KLM_M,:KLM,:M)
     ], 
+    # attributes
     [:IntAttr], 
+    # attribute columns (non foreign key data columns)
     [
         (:value_ijk,:IJK,:IntAttr),
         (:value_jkl,:JKL,:IntAttr),
@@ -290,7 +271,7 @@ add_parts!(
     IJK_I=vec([e[1] for e in ijk_prod]),
     IJK_J=vec([e[2] for e in ijk_prod]),
     IJK_K=vec([e[3] for e in ijk_prod]),
-    value_ijk=SampleBinomialVec(I,J,K)
+    value_ijk=IJK.value
 )
 
 rem_parts!(
@@ -309,7 +290,7 @@ add_parts!(
     JKL_J=vec([e[1] for e in jkl_prod]),
     JKL_K=vec([e[2] for e in jkl_prod]),
     JKL_L=vec([e[3] for e in jkl_prod]),
-    value_jkl=SampleBinomialVec(J,K,L)
+    value_jkl=JKL.value
 )
 
 rem_parts!(
@@ -328,7 +309,7 @@ add_parts!(
     KLM_K=vec([e[1] for e in klm_prod]),
     KLM_L=vec([e[2] for e in klm_prod]),
     KLM_M=vec([e[3] for e in klm_prod]),
-    value_klm=SampleBinomialVec(K,L,M)
+    value_klm=KLM.value
 )
 
 rem_parts!(
@@ -356,3 +337,56 @@ Catlab.to_graphviz(connected_paths_query, box_labels=:name, junction_labels=:var
 ```
 
 ![](gams_files/figure-commonmark/cell-8-output-1.svg)
+
+While the blog post should be consulted for a complete explanation, the
+conjunctive query is expressed using an undirected wiring diagram (UWD)
+which is visualized using Catlab. Nodes (labeled ovals) in the UWD
+correspond to tables (primary keys) in the acset. Junctions (labeled
+dots) correspond to variables. Ports, which are unlabed in this
+graphical depiction, are where wires connect junctions to nodes. These
+correspond to columns of the table they are connected to. Outer ports,
+which are wires that run “off the page”, are the columns of the table
+that will be returned as the result of the query. The rows that are
+returned from the query come from filtering the Cartesian product of the
+tables (nodes) such that variables in columns match according to ports
+that share a junction. In this case, it is equivalent to the two inner
+joins as done above using DataFrames.
+
+The query is evaluated on the acset by computing its limit, which is a
+kind of generalization of meet. We can confirm that both the acsets and
+data frame methods get the same result:
+
+``` julia
+ijklm_df
+```
+
+``` julia
+query(ijklm_dat, connected_paths_query)
+```
+
+Now that we know they are equal, we can go ahead and see how fast the
+acsets version is.
+
+``` julia
+@benchmark let
+    ijklm = query(ijklm_dat, connected_paths_query)
+    model = JuMP.Model(HiGHS.Optimizer)
+    set_silent(model)
+    ijklm[!, :x] = @variable(model, x[1:size(ijklm, 1)] >= 0)
+    for df in DataFrames.groupby(ijklm, :i)
+        @constraint(model, sum(df.x) >= 0)
+    end
+    optimize!(model)
+end
+```
+
+    BenchmarkTools.Trial: 1271 samples with 1 evaluation.
+     Range (min … max):  3.408 ms … 8.767 ms  ┊ GC (min … max): 0.00% … 45.72%
+     Time  (median):     3.553 ms             ┊ GC (median):    0.00%
+     Time  (mean ± σ):   3.933 ms ± 1.230 ms  ┊ GC (mean ± σ):  7.42% ± 12.27%
+
+      ▅█▆▃▂▂                                               ▁▁    
+      ███████▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▇████▇ █
+      3.41 ms     Histogram: log(frequency) by time     8.29 ms <
+
+     Memory estimate: 3.50 MiB, allocs estimate: 30138.

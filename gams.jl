@@ -16,8 +16,8 @@ SampleBinomialVec = function(A,B,C,p=0.05)
     return vec
 end
 
-n=100 # something large
-m=20 # 20
+n=8 # something large
+m=10 # 20
 
 # Sets IJKLM 
 I = ["i$x" for x in 1:n]
@@ -49,25 +49,25 @@ KLM_sparse = [(x.k, x.l, x.m) for x in eachrow(KLM) if x.value == true]
 # make the optim model
 using JuMP, HiGHS
 
-# -----------------------------------------------
-# the "intuitive" formulation --- the one to beat
-@benchmark let 
-    x_list = [
-        (i, j, k, l, m)
-        for (i, j, k) in IJK_sparse
-        for (jj, kk, l) in JKL_sparse if jj == j && kk == k
-        for (kkk, ll, m) in KLM_sparse if kkk == k && ll == l
-    ]
-    model = Model(HiGHS.Optimizer)
-    set_silent(model)
-    @variable(model, x[x_list] >= 0)
-    @constraint(
-        model,
-        [i in I], 
-        sum(x[k] for k in x_list if k[1] == i) >= 0
-    )
-    optimize!(model)
-end
+# # -----------------------------------------------
+# # the "intuitive" formulation --- the one to beat
+# @benchmark let 
+#     x_list = [
+#         (i, j, k, l, m)
+#         for (i, j, k) in IJK_sparse
+#         for (jj, kk, l) in JKL_sparse if jj == j && kk == k
+#         for (kkk, ll, m) in KLM_sparse if kkk == k && ll == l
+#     ]
+#     model = Model(HiGHS.Optimizer)
+#     set_silent(model)
+#     @variable(model, x[x_list] >= 0)
+#     @constraint(
+#         model,
+#         [i in I], 
+#         sum(x[k] for k in x_list if k[1] == i) >= 0
+#     )
+#     optimize!(model)
+# end
 
 # ----------------------
 # the DataFrames version
@@ -80,17 +80,17 @@ select!(JKL_sparse_df, Not(:value))
 KLM_sparse_df = filter(x -> x.value == 1, KLM)
 select!(KLM_sparse_df, Not(:value))
 
-ijklm = DataFrames.innerjoin(
+ijklm_df = DataFrames.innerjoin(
     DataFrames.innerjoin(IJK_sparse_df, JKL_sparse_df; on = [:j, :k]),
     KLM_sparse_df;
     on = [:k, :l],
 )
 
 # build model
-model = JuMP.Model()
+model = JuMP.Model(HiGHS.Optimizer)
 set_silent(model)
-ijklm[!, :x] = @variable(model, x[1:size(ijklm, 1)] >= 0)
-for df in DataFrames.groupby(ijklm, :i)
+ijklm_df[!, :x] = @variable(model, x[1:size(ijklm_df, 1)] >= 0)
+for df in DataFrames.groupby(ijklm_df, :i)
     @constraint(model, sum(df.x) >= 0)
 end
 optimize!(model)
@@ -123,9 +123,6 @@ IJKLMSch = BasicSchema(
 
 @acset_type IJKLMData(IJKLMSch, index=[:IJK_I,:IJK_J,:IJK_K,:JKL_J,:JKL_K,:JKL_L,:KLM_K,:KLM_L,:KLM_M])
 
-n=8 # something large
-m=10 # 20
-
 # the basic sets
 I = collect(1:n)
 J = collect(1:m)
@@ -154,7 +151,8 @@ add_parts!(
     IJK_I=vec([e[1] for e in ijk_prod]),
     IJK_J=vec([e[2] for e in ijk_prod]),
     IJK_K=vec([e[3] for e in ijk_prod]),
-    value_ijk=SampleBinomialVec(I,J,K)
+    # value_ijk=SampleBinomialVec(I,J,K)
+    value_ijk=IJK.value
 )
 
 rem_parts!(
@@ -173,7 +171,8 @@ add_parts!(
     JKL_J=vec([e[1] for e in jkl_prod]),
     JKL_K=vec([e[2] for e in jkl_prod]),
     JKL_L=vec([e[3] for e in jkl_prod]),
-    value_jkl=SampleBinomialVec(J,K,L)
+    # value_jkl=SampleBinomialVec(J,K,L)
+    value_jkl=JKL.value
 )
 
 rem_parts!(
@@ -192,7 +191,8 @@ add_parts!(
     KLM_K=vec([e[1] for e in klm_prod]),
     KLM_L=vec([e[2] for e in klm_prod]),
     KLM_M=vec([e[3] for e in klm_prod]),
-    value_klm=SampleBinomialVec(K,L,M)
+    # value_klm=SampleBinomialVec(K,L,M)
+    value_klm=KLM.value
 )
 
 rem_parts!(
