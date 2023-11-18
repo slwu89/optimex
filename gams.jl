@@ -93,12 +93,12 @@ ijklm[!, :x] = @variable(model, x[1:size(ijklm, 1)] >= 0)
 for df in DataFrames.groupby(ijklm, :i)
     @constraint(model, sum(df.x) >= 0)
 end
-# optimize!(model)
+optimize!(model)
 
 # ------------------
 # the acsets version
 
-using ACSets
+using ACSets, Catlab
 
 IJKLMSch = BasicSchema(
     [:I,:J,:K,:L,:M,:IJK,:JKL,:KLM], 

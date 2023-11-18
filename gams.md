@@ -100,33 +100,33 @@ JKL_sparse = [(x.j, x.k, x.l) for x in eachrow(JKL) if x.value == true]
 KLM_sparse = [(x.k, x.l, x.m) for x in eachrow(KLM) if x.value == true]
 ```
 
-    427-element Vector{Tuple{String, String, String}}:
-     ("k11", "l1", "m1")
-     ("k7", "l2", "m1")
-     ("k3", "l4", "m1")
-     ("k16", "l5", "m1")
-     ("k15", "l7", "m1")
-     ("k19", "l8", "m1")
-     ("k18", "l9", "m1")
-     ("k18", "l11", "m1")
-     ("k20", "l11", "m1")
-     ("k8", "l12", "m1")
-     ("k19", "l13", "m1")
-     ("k9", "l14", "m1")
-     ("k5", "l15", "m1")
+    415-element Vector{Tuple{String, String, String}}:
+     ("k5", "l2", "m1")
+     ("k2", "l4", "m1")
+     ("k6", "l4", "m1")
+     ("k14", "l4", "m1")
+     ("k16", "l4", "m1")
+     ("k5", "l6", "m1")
+     ("k7", "l8", "m1")
+     ("k9", "l9", "m1")
+     ("k10", "l11", "m1")
+     ("k11", "l11", "m1")
+     ("k9", "l12", "m1")
+     ("k16", "l13", "m1")
+     ("k12", "l14", "m1")
      ⋮
-     ("k4", "l10", "m20")
+     ("k12", "l5", "m20")
+     ("k4", "l7", "m20")
+     ("k5", "l7", "m20")
+     ("k16", "l7", "m20")
+     ("k13", "l8", "m20")
      ("k19", "l10", "m20")
-     ("k18", "l11", "m20")
-     ("k14", "l12", "m20")
-     ("k19", "l12", "m20")
-     ("k8", "l13", "m20")
-     ("k17", "l13", "m20")
-     ("k6", "l16", "m20")
-     ("k15", "l16", "m20")
-     ("k3", "l18", "m20")
-     ("k5", "l20", "m20")
-     ("k13", "l20", "m20")
+     ("k3", "l12", "m20")
+     ("k13", "l14", "m20")
+     ("k12", "l16", "m20")
+     ("k16", "l16", "m20")
+     ("k14", "l17", "m20")
+     ("k5", "l18", "m20")
 
 ## The “intuitive” formulation
 
@@ -152,13 +152,207 @@ As we know this is the slow one.
 end
 ```
 
-    BenchmarkTools.Trial: 156 samples with 1 evaluation.
-     Range (min … max):  31.636 ms …  35.081 ms  ┊ GC (min … max): 11.51% … 12.46%
-     Time  (median):     32.097 ms               ┊ GC (median):    11.92%
-     Time  (mean ± σ):   32.146 ms ± 401.444 μs  ┊ GC (mean ± σ):  11.93% ±  0.32%
+    BenchmarkTools.Trial: 182 samples with 1 evaluation.
+     Range (min … max):  24.698 ms … 69.534 ms  ┊ GC (min … max):  6.46% … 31.23%
+     Time  (median):     27.338 ms              ┊ GC (median):    14.67%
+     Time  (mean ± σ):   27.512 ms ±  3.389 ms  ┊ GC (mean ± σ):  13.71% ±  3.05%
 
-           ▃ ▂ ▄▅  ▃▅▂▅▃█▄▂     ▂                                   
-      ▃▃▃▇▅█▇█▆███▇████████▇▆█▅▁█▃▆▁▅▃▁▃▅▃▁▁▁▁▁▁▁▁▆▁▃▁▁▁▁▁▁▁▁▁▁▁▁▃ ▃
-      31.6 ms         Histogram: frequency by time         33.3 ms <
+          ▂              ▁▂▅█ ▃▃▂▇      ▂                          
+      ▃▁▁▄█▇█▇▄▄▄▃▄█▃▄▄▅▆████▆████▇█▆▁▄▅█▇▅▃▄▁▃▁▁▁▃▁▁▁▁▁▃▁▁▁▁▁▁▁▃ ▃
+      24.7 ms         Histogram: frequency by time        31.5 ms <
 
-     Memory estimate: 87.66 MiB, allocs estimate: 1863112.
+     Memory estimate: 76.35 MiB, allocs estimate: 1618283.
+
+## The DataFrames version
+
+The fast one at the JuMP blog link.
+
+``` julia
+IJK_sparse_df = filter(x -> x.value == 1, IJK)
+select!(IJK_sparse_df, Not(:value))
+
+JKL_sparse_df = filter(x -> x.value == 1, JKL)
+select!(JKL_sparse_df, Not(:value))
+
+KLM_sparse_df = filter(x -> x.value == 1, KLM)
+select!(KLM_sparse_df, Not(:value))
+
+ijklm_df = DataFrames.innerjoin(
+    DataFrames.innerjoin(IJK_sparse_df, JKL_sparse_df; on = [:j, :k]),
+    KLM_sparse_df;
+    on = [:k, :l],
+)
+
+@benchmark let
+    ijklm = DataFrames.innerjoin(
+        DataFrames.innerjoin(IJK_sparse_df, JKL_sparse_df; on = [:j, :k]),
+        KLM_sparse_df;
+        on = [:k, :l],
+    )
+    model = JuMP.Model(HiGHS.Optimizer)
+    set_silent(model)
+    ijklm[!, :x] = @variable(model, x[1:size(ijklm, 1)] >= 0)
+    for df in DataFrames.groupby(ijklm, :i)
+        @constraint(model, sum(df.x) >= 0)
+    end
+    optimize!(model)
+end
+```
+
+    BenchmarkTools.Trial: 1372 samples with 1 evaluation.
+     Range (min … max):  3.171 ms … 10.570 ms  ┊ GC (min … max): 0.00% … 44.47%
+     Time  (median):     3.283 ms              ┊ GC (median):    0.00%
+     Time  (mean ± σ):   3.644 ms ±  1.215 ms  ┊ GC (mean ± σ):  6.60% ± 11.24%
+
+      ▇█▄▂▁                                                 ▁     
+      █████▇██▇▆▃▅▅▅▁▃▁▃▃▁▁▁▃▁▁▁▁▃▁▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃▁▅▆██▇▆▆ █
+      3.17 ms      Histogram: log(frequency) by time     8.39 ms <
+
+     Memory estimate: 2.77 MiB, allocs estimate: 24243.
+
+## The acsets version
+
+For those who don’t know acsets (Attributed C-Sets) are a nifty data
+structure coming from applied category theory, but its not too far off
+to think of them as in-memory relational databases. They are provided in
+the [ACSets.jl](https://github.com/AlgebraicJulia/ACSets.jl) library.
+
+We use `BasicSchema` to make a schema for the acset which will store the
+data. Note that `Catlab.jl` provides a much nicer macro `@present` for
+this, but we try to use as much as possible only the bare bones API from
+ACSets to avoid introducing too many category theoretic concepts. For
+us, it’s just a database schema.
+
+The only code from Catlab we need is the line below the schema where we
+display it graphically.
+
+``` julia
+IJKLMSch = BasicSchema(
+    [:I,:J,:K,:L,:M,:IJK,:JKL,:KLM], 
+    [
+        (:IJK_I,:IJK,:I),
+        (:IJK_J,:IJK,:J),
+        (:IJK_K,:IJK,:K),
+        (:JKL_J,:JKL,:J),
+        (:JKL_K,:JKL,:K),
+        (:JKL_L,:JKL,:L),
+        (:KLM_K,:KLM,:K),
+        (:KLM_L,:KLM,:L),
+        (:KLM_M,:KLM,:M)
+    ], 
+    [:IntAttr], 
+    [
+        (:value_ijk,:IJK,:IntAttr),
+        (:value_jkl,:JKL,:IntAttr),
+        (:value_klm,:KLM,:IntAttr)
+    ]
+)
+
+Catlab.to_graphviz(Catlab.Presentation(IJKLMSch), graph_attrs=Dict(:dpi=>"72",:ratio=>"expand",:size=>"8"))
+```
+
+![](gams_files/figure-commonmark/cell-6-output-1.svg)
+
+Now we programatically generate the data type (and functions to work
+with it) for our schema, and fill it with data. The code is verbose, but
+we’re storing all the sets and relations in a single data structure, and
+also doing it without some of the categorical machinery from Catlab
+which would ease this.
+
+``` julia
+@acset_type IJKLMData(IJKLMSch, index=[:IJK_I,:IJK_J,:IJK_K,:JKL_J,:JKL_K,:JKL_L,:KLM_K,:KLM_L,:KLM_M])
+
+# the basic sets
+I = collect(1:n)
+J = collect(1:m)
+K = collect(1:m)
+L = collect(1:m)
+M = collect(1:m)
+
+# make the data
+ijklm_dat = IJKLMData{Int}()
+
+add_parts!(ijklm_dat, :I, length(I))
+add_parts!(ijklm_dat, :J, length(J))
+add_parts!(ijklm_dat, :K, length(K))
+add_parts!(ijklm_dat, :L, length(L))
+add_parts!(ijklm_dat, :M, length(M))
+
+# add the relations...first as product...then sparsify
+
+# IJK
+ijk_prod = Iterators.product(I,J,K)
+
+add_parts!(
+    ijklm_dat, 
+    :IJK,
+    length(ijk_prod),
+    IJK_I=vec([e[1] for e in ijk_prod]),
+    IJK_J=vec([e[2] for e in ijk_prod]),
+    IJK_K=vec([e[3] for e in ijk_prod]),
+    value_ijk=SampleBinomialVec(I,J,K)
+)
+
+rem_parts!(
+    ijklm_dat, 
+    :IJK, 
+    findall(ijklm_dat[:,:value_ijk] .== 0)
+)
+
+# JKL
+jkl_prod = Iterators.product(J,K,L)
+
+add_parts!(
+    ijklm_dat, 
+    :JKL,
+    length(jkl_prod),
+    JKL_J=vec([e[1] for e in jkl_prod]),
+    JKL_K=vec([e[2] for e in jkl_prod]),
+    JKL_L=vec([e[3] for e in jkl_prod]),
+    value_jkl=SampleBinomialVec(J,K,L)
+)
+
+rem_parts!(
+    ijklm_dat, 
+    :JKL, 
+    findall(ijklm_dat[:,:value_jkl] .== 0)
+)
+
+# KLM
+klm_prod = Iterators.product(K,L,M)
+
+add_parts!(
+    ijklm_dat, 
+    :KLM,
+    length(klm_prod),
+    KLM_K=vec([e[1] for e in klm_prod]),
+    KLM_L=vec([e[2] for e in klm_prod]),
+    KLM_M=vec([e[3] for e in klm_prod]),
+    value_klm=SampleBinomialVec(K,L,M)
+)
+
+rem_parts!(
+    ijklm_dat, 
+    :KLM, 
+    findall(ijklm_dat[:,:value_klm] .== 0)
+)
+```
+
+Now, the critical thing that the JuMP devs did to speed thing up was to
+replace the for loops with 2 inner joins, to get the “paths” through the
+relations. How to do this with acsets? Well we can execute a conjunctive
+query on the acset to get the same thing. This is described in a [post
+at the AlgebraicJulia
+blog](https://blog.algebraicjulia.org/post/2020/12/cset-conjunctive-queries/).
+
+``` julia
+connected_paths_query = @relation (i=i,j=j,k=k,l=l,m=m) begin
+    IJK(IJK_I=i, IJK_J=j, IJK_K=k)
+    JKL(JKL_J=j, JKL_K=k, JKL_L=l)
+    KLM(KLM_K=k, KLM_L=l, KLM_M=m)
+end
+
+Catlab.to_graphviz(connected_paths_query, box_labels=:name, junction_labels=:variable, graph_attrs=Dict(:dpi=>"72",:size=>"3.5",:ratio=>"expand"))
+```
+
+![](gams_files/figure-commonmark/cell-8-output-1.svg)

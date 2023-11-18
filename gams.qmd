@@ -101,3 +101,165 @@ As we know this is the slow one.
     optimize!(model)
 end
 ```
+
+## The DataFrames version
+
+The fast one at the JuMP blog link.
+
+```{julia}
+IJK_sparse_df = filter(x -> x.value == 1, IJK)
+select!(IJK_sparse_df, Not(:value))
+
+JKL_sparse_df = filter(x -> x.value == 1, JKL)
+select!(JKL_sparse_df, Not(:value))
+
+KLM_sparse_df = filter(x -> x.value == 1, KLM)
+select!(KLM_sparse_df, Not(:value))
+
+ijklm_df = DataFrames.innerjoin(
+    DataFrames.innerjoin(IJK_sparse_df, JKL_sparse_df; on = [:j, :k]),
+    KLM_sparse_df;
+    on = [:k, :l],
+)
+
+@benchmark let
+    ijklm = DataFrames.innerjoin(
+        DataFrames.innerjoin(IJK_sparse_df, JKL_sparse_df; on = [:j, :k]),
+        KLM_sparse_df;
+        on = [:k, :l],
+    )
+    model = JuMP.Model(HiGHS.Optimizer)
+    set_silent(model)
+    ijklm[!, :x] = @variable(model, x[1:size(ijklm, 1)] >= 0)
+    for df in DataFrames.groupby(ijklm, :i)
+        @constraint(model, sum(df.x) >= 0)
+    end
+    optimize!(model)
+end
+```
+
+## The acsets version
+
+For those who don't know acsets (Attributed C-Sets) are a nifty data structure coming from applied category theory, but its not too far off to think of them as in-memory relational databases. They are provided in the [ACSets.jl](https://github.com/AlgebraicJulia/ACSets.jl) library.
+
+We use `BasicSchema` to make a schema for the acset which will store the data. Note that `Catlab.jl` provides a much nicer macro `@present` for this, but we try to use as much as possible only the bare bones API from ACSets to avoid introducing too many category theoretic concepts. For us, it's just a database schema. 
+
+The only code from Catlab we need is the line below the schema where we display it graphically.
+
+```{julia}
+IJKLMSch = BasicSchema(
+    [:I,:J,:K,:L,:M,:IJK,:JKL,:KLM], 
+    [
+        (:IJK_I,:IJK,:I),
+        (:IJK_J,:IJK,:J),
+        (:IJK_K,:IJK,:K),
+        (:JKL_J,:JKL,:J),
+        (:JKL_K,:JKL,:K),
+        (:JKL_L,:JKL,:L),
+        (:KLM_K,:KLM,:K),
+        (:KLM_L,:KLM,:L),
+        (:KLM_M,:KLM,:M)
+    ], 
+    [:IntAttr], 
+    [
+        (:value_ijk,:IJK,:IntAttr),
+        (:value_jkl,:JKL,:IntAttr),
+        (:value_klm,:KLM,:IntAttr)
+    ]
+)
+
+Catlab.to_graphviz(Catlab.Presentation(IJKLMSch), graph_attrs=Dict(:dpi=>"72",:ratio=>"expand",:size=>"8"))
+```
+
+Now we programatically generate the data type (and functions to work with it) for our schema, and fill it with data. The code is verbose, but we're storing all the sets and relations in a single data structure, and also doing it without some of the categorical machinery from Catlab which would ease this.
+
+```{julia}
+@acset_type IJKLMData(IJKLMSch, index=[:IJK_I,:IJK_J,:IJK_K,:JKL_J,:JKL_K,:JKL_L,:KLM_K,:KLM_L,:KLM_M])
+
+# the basic sets
+I = collect(1:n)
+J = collect(1:m)
+K = collect(1:m)
+L = collect(1:m)
+M = collect(1:m)
+
+# make the data
+ijklm_dat = IJKLMData{Int}()
+
+add_parts!(ijklm_dat, :I, length(I))
+add_parts!(ijklm_dat, :J, length(J))
+add_parts!(ijklm_dat, :K, length(K))
+add_parts!(ijklm_dat, :L, length(L))
+add_parts!(ijklm_dat, :M, length(M))
+
+# add the relations...first as product...then sparsify
+
+# IJK
+ijk_prod = Iterators.product(I,J,K)
+
+add_parts!(
+    ijklm_dat, 
+    :IJK,
+    length(ijk_prod),
+    IJK_I=vec([e[1] for e in ijk_prod]),
+    IJK_J=vec([e[2] for e in ijk_prod]),
+    IJK_K=vec([e[3] for e in ijk_prod]),
+    value_ijk=SampleBinomialVec(I,J,K)
+)
+
+rem_parts!(
+    ijklm_dat, 
+    :IJK, 
+    findall(ijklm_dat[:,:value_ijk] .== 0)
+)
+
+# JKL
+jkl_prod = Iterators.product(J,K,L)
+
+add_parts!(
+    ijklm_dat, 
+    :JKL,
+    length(jkl_prod),
+    JKL_J=vec([e[1] for e in jkl_prod]),
+    JKL_K=vec([e[2] for e in jkl_prod]),
+    JKL_L=vec([e[3] for e in jkl_prod]),
+    value_jkl=SampleBinomialVec(J,K,L)
+)
+
+rem_parts!(
+    ijklm_dat, 
+    :JKL, 
+    findall(ijklm_dat[:,:value_jkl] .== 0)
+)
+
+# KLM
+klm_prod = Iterators.product(K,L,M)
+
+add_parts!(
+    ijklm_dat, 
+    :KLM,
+    length(klm_prod),
+    KLM_K=vec([e[1] for e in klm_prod]),
+    KLM_L=vec([e[2] for e in klm_prod]),
+    KLM_M=vec([e[3] for e in klm_prod]),
+    value_klm=SampleBinomialVec(K,L,M)
+)
+
+rem_parts!(
+    ijklm_dat, 
+    :KLM, 
+    findall(ijklm_dat[:,:value_klm] .== 0)
+)
+```
+
+Now, the critical thing that the JuMP devs did to speed thing up was to replace the for loops with 2 inner joins, to get the "paths" through the relations. How to do this with acsets? Well we can execute a conjunctive query on the acset to get the same thing. This is described in a [post at the AlgebraicJulia blog](https://blog.algebraicjulia.org/post/2020/12/cset-conjunctive-queries/).
+
+```{julia}
+connected_paths_query = @relation (i=i,j=j,k=k,l=l,m=m) begin
+    IJK(IJK_I=i, IJK_J=j, IJK_K=k)
+    JKL(JKL_J=j, JKL_K=k, JKL_L=l)
+    KLM(KLM_K=k, KLM_L=l, KLM_M=m)
+end
+
+Catlab.to_graphviz(connected_paths_query, box_labels=:name, junction_labels=:variable, graph_attrs=Dict(:dpi=>"72",:size=>"3.5",:ratio=>"expand"))
+```
