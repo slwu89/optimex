@@ -123,6 +123,12 @@ ijklm_df = DataFrames.innerjoin(
     on = [:k, :l],
 )
 
+ijklm_df
+```
+
+Let's benchmark it.
+
+```{julia}
 @benchmark let
     ijklm = DataFrames.innerjoin(
         DataFrames.innerjoin(IJK_sparse_df, JKL_sparse_df; on = [:j, :k]),
@@ -274,11 +280,7 @@ While the blog post should be consulted for a complete explanation, the conjunct
 The query is evaluated on the acset by computing its limit, which is a kind of generalization of meet. We can confirm that both the acsets and data frame methods get the same result:
 
 ```{julia}
-ijklm_df
-```
-
-```{julia}
-query(ijklm_dat, connected_paths_query)
+sort(ijklm_df) == sort(query(ijklm_dat, connected_paths_query))
 ```
 
 Now that we know they are equal, we can go ahead and see how fast the acsets version is.

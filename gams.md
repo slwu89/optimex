@@ -124,16 +124,16 @@ As we know this is the slow one.
 end
 ```
 
-    BenchmarkTools.Trial: 174 samples with 1 evaluation.
-     Range (min … max):  26.144 ms … 33.714 ms  ┊ GC (min … max):  9.58% … 19.06%
-     Time  (median):     28.975 ms              ┊ GC (median):    18.26%
-     Time  (mean ± σ):   28.737 ms ±  1.073 ms  ┊ GC (mean ± σ):  17.24% ±  2.86%
+    BenchmarkTools.Trial: 179 samples with 1 evaluation.
+     Range (min … max):  25.914 ms … 29.360 ms  ┊ GC (min … max):  9.62% … 20.13%
+     Time  (median):     28.823 ms              ┊ GC (median):    18.49%
+     Time  (mean ± σ):   28.066 ms ±  1.231 ms  ┊ GC (mean ± σ):  16.48% ±  3.54%
 
-                                           ▂▇█                     
-      ▃▃▄▅▅▅▃▁▃▃▁▁▁▃▁▁▃▁▁▁▁▁▁▁▃▁▁▁▁▁▁▁▁▁▃▇▆███▇▇▇▆▄▄▃▃▃▄▁▁▁▃▄▁▁▁▃ ▃
-      26.1 ms         Histogram: frequency by time        30.4 ms <
+                                                        ▄▆█        
+      ▂▂▁▃▇█▆▅▃▃▃▂▁▁▁▁▁▁▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂███▇▅▄▄▄▃ ▂
+      25.9 ms         Histogram: frequency by time        29.3 ms <
 
-     Memory estimate: 80.40 MiB, allocs estimate: 1707380.
+     Memory estimate: 73.64 MiB, allocs estimate: 1560849.
 
 ## The DataFrames version
 
@@ -155,6 +155,12 @@ ijklm_df = DataFrames.innerjoin(
     on = [:k, :l],
 )
 
+ijklm_df
+```
+
+Let’s benchmark it.
+
+``` julia
 @benchmark let
     ijklm = DataFrames.innerjoin(
         DataFrames.innerjoin(IJK_sparse_df, JKL_sparse_df; on = [:j, :k]),
@@ -171,16 +177,16 @@ ijklm_df = DataFrames.innerjoin(
 end
 ```
 
-    BenchmarkTools.Trial: 1436 samples with 1 evaluation.
-     Range (min … max):  3.040 ms … 9.067 ms  ┊ GC (min … max): 0.00% … 48.03%
-     Time  (median):     3.165 ms             ┊ GC (median):    0.00%
-     Time  (mean ± σ):   3.480 ms ± 1.214 ms  ┊ GC (mean ± σ):  7.12% ± 11.79%
+    BenchmarkTools.Trial: 1470 samples with 1 evaluation.
+     Range (min … max):  2.962 ms … 8.528 ms  ┊ GC (min … max): 0.00% … 51.20%
+     Time  (median):     3.097 ms             ┊ GC (median):    0.00%
+     Time  (mean ± σ):   3.400 ms ± 1.207 ms  ┊ GC (mean ± σ):  7.22% ± 11.84%
 
-      ▇█▅▁                                                  ▁▁   
-      ████▇▄▃▁▄▁▁▁▁▁▁▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▆▇██▇ █
-      3.04 ms     Histogram: log(frequency) by time     8.35 ms <
+      ▆█▅                                                    ▁   
+      ████▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃▃▄███ █
+      2.96 ms     Histogram: log(frequency) by time     8.23 ms <
 
-     Memory estimate: 2.74 MiB, allocs estimate: 23717.
+     Memory estimate: 2.68 MiB, allocs estimate: 22931.
 
 ## The acsets version
 
@@ -232,7 +238,7 @@ IJKLMSch = BasicSchema(
 Catlab.to_graphviz(Catlab.Presentation(IJKLMSch), graph_attrs=Dict(:dpi=>"72",:ratio=>"expand",:size=>"8"))
 ```
 
-![](gams_files/figure-commonmark/cell-6-output-1.svg)
+![](gams_files/figure-commonmark/cell-7-output-1.svg)
 
 Now we programatically generate the data type (and functions to work
 with it) for our schema, and fill it with data. The code is verbose, but
@@ -336,7 +342,7 @@ end
 Catlab.to_graphviz(connected_paths_query, box_labels=:name, junction_labels=:variable, graph_attrs=Dict(:dpi=>"72",:size=>"3.5",:ratio=>"expand"))
 ```
 
-![](gams_files/figure-commonmark/cell-8-output-1.svg)
+![](gams_files/figure-commonmark/cell-9-output-1.svg)
 
 While the blog post should be consulted for a complete explanation, the
 conjunctive query is expressed using an undirected wiring diagram (UWD)
@@ -357,12 +363,10 @@ kind of generalization of meet. We can confirm that both the acsets and
 data frame methods get the same result:
 
 ``` julia
-ijklm_df
+sort(ijklm_df) == sort(query(ijklm_dat, connected_paths_query))
 ```
 
-``` julia
-query(ijklm_dat, connected_paths_query)
-```
+    false
 
 Now that we know they are equal, we can go ahead and see how fast the
 acsets version is.
@@ -380,13 +384,13 @@ acsets version is.
 end
 ```
 
-    BenchmarkTools.Trial: 1271 samples with 1 evaluation.
-     Range (min … max):  3.408 ms … 8.767 ms  ┊ GC (min … max): 0.00% … 45.72%
-     Time  (median):     3.553 ms             ┊ GC (median):    0.00%
-     Time  (mean ± σ):   3.933 ms ± 1.230 ms  ┊ GC (mean ± σ):  7.42% ± 12.27%
+    BenchmarkTools.Trial: 1332 samples with 1 evaluation.
+     Range (min … max):  3.272 ms … 8.270 ms  ┊ GC (min … max): 0.00% … 47.54%
+     Time  (median):     3.402 ms             ┊ GC (median):    0.00%
+     Time  (mean ± σ):   3.751 ms ± 1.219 ms  ┊ GC (mean ± σ):  7.52% ± 12.30%
 
-      ▅█▆▃▂▂                                               ▁▁    
-      ███████▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▇████▇ █
-      3.41 ms     Histogram: log(frequency) by time     8.29 ms <
+      ▇█▃ ▂                                                ▁ ▁   
+      ██████▅▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃▁▁▅▇████ █
+      3.27 ms     Histogram: log(frequency) by time     8.15 ms <
 
-     Memory estimate: 3.50 MiB, allocs estimate: 30138.
+     Memory estimate: 3.38 MiB, allocs estimate: 29260.
