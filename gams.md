@@ -40,18 +40,16 @@ General subsets of products are known as “relations”.
 
 ## Data generation
 
-First we load some packages we’ll need. `DataFrames` for dataframes,
+First we load some packages we’ll need. `DataFrames` for data frames,
 `Distributions` for sampling binomial random variates, `JuMP` to set up
-the model, `HiGHS` for a solver. `ACSets` are used as an alternative
-data structure for the model, and `Catlab` is just needed to plot the
-database schema (finite presentation of a category) used to represent
-the data.
+the model, `HiGHS` for a solver. `Catlab` provides a new data structure,
+the C-Set which will be compared to the data frames method.
 
 ``` julia
 using DataFrames
 using Distributions
 using JuMP, HiGHS
-using ACSets, Catlab
+using Catlab
 using BenchmarkTools, MarkdownTables
 ```
 
@@ -124,16 +122,16 @@ As we know this is the slow one.
 end
 ```
 
-    BenchmarkTools.Trial: 186 samples with 1 evaluation.
-     Range (min … max):  23.743 ms … 38.693 ms  ┊ GC (min … max):  9.12% … 14.37%
-     Time  (median):     26.484 ms              ┊ GC (median):    15.91%
-     Time  (mean ± σ):   26.893 ms ±  2.144 ms  ┊ GC (mean ± σ):  14.39% ±  3.07%
+    BenchmarkTools.Trial: 204 samples with 1 evaluation.
+     Range (min … max):  23.139 ms …  27.440 ms  ┊ GC (min … max):  9.11% … 15.04%
+     Time  (median):     24.799 ms               ┊ GC (median):    13.47%
+     Time  (mean ± σ):   24.551 ms ± 815.388 μs  ┊ GC (mean ± σ):  12.68% ±  2.53%
 
-                 ▂█▃▂▁                                             
-      ▇▆▇▃▇▄▃▄▅█▇█████▅▅█▅▇▄▄██▆▄▃▄▄▄▃▄▄▁▄▃▁▁▁▁▁▁▄▁▁▁▁▁▁▁▁▁▁▁▁▃▁▃ ▃
-      23.7 ms         Histogram: frequency by time        34.9 ms <
+       ▁     ▁▄▇▁                            ▃▆▃ ▁▁ ▄ ▃▁ █▁▁█▆      
+      ▄█▇▄▄▇▆████▇▃▁▁▁▄▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃▁▄▇▆▄███▆██▆█▆██▄█████▆▇▃▃ ▄
+      23.1 ms         Histogram: frequency by time         25.5 ms <
 
-     Memory estimate: 74.22 MiB, allocs estimate: 1583533.
+     Memory estimate: 73.83 MiB, allocs estimate: 1574666.
 
 ## The DataFrames version
 
@@ -175,77 +173,65 @@ Let’s benchmark it.
 end
 ```
 
-    BenchmarkTools.Trial: 1455 samples with 1 evaluation.
-     Range (min … max):  2.977 ms … 19.495 ms  ┊ GC (min … max): 0.00% …  0.00%
-     Time  (median):     3.113 ms              ┊ GC (median):    0.00%
-     Time  (mean ± σ):   3.434 ms ±  1.218 ms  ┊ GC (mean ± σ):  5.75% ± 10.17%
+    BenchmarkTools.Trial: 1540 samples with 1 evaluation.
+     Range (min … max):  2.851 ms … 8.153 ms  ┊ GC (min … max): 0.00% … 46.05%
+     Time  (median):     2.992 ms             ┊ GC (median):    0.00%
+     Time  (mean ± σ):   3.246 ms ± 1.105 ms  ┊ GC (mean ± σ):  5.95% ± 10.29%
 
-      ▇█▅▄▂▁                                                      
-      ███████▆▆▅▃▄▁▁▄▁▁▃▁▄▁▁▁▁▃▁▁▁▁▁▁▁▁▁▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▃▆▆██▆▇▆ █
-      2.98 ms      Histogram: log(frequency) by time      8.4 ms <
+      ▆█▄                                                     ▁  
+      ███▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▅▇██ █
+      2.85 ms     Histogram: log(frequency) by time     7.95 ms <
 
-     Memory estimate: 2.36 MiB, allocs estimate: 21719.
+     Memory estimate: 2.38 MiB, allocs estimate: 21949.
 
 ## The acsets version
 
 Acsets (Attributed C-Sets) are a nifty data structure coming from
 applied category theory, but its not too far off to think of them just
 as in-memory relational databases. They are provided in the
-[ACSets.jl](https://github.com/AlgebraicJulia/ACSets.jl) library. One of
-the advantages of using acsets and categorical machinery in general is
-that they have a natural graphical presentation, which in many cases is
-very readable and illuminating.
+[ACSets.jl](https://github.com/AlgebraicJulia/ACSets.jl) library, and
+imported and extended with machinery from applied category theory in
+[Catlab.jl](https://github.com/AlgebraicJulia/Catlab.jl). One of the
+advantages of using acsets and categorical machinery in general is that
+they have a natural graphical presentation, which in many cases is very
+readable and illuminating. To learn more about this data structure and
+many more topics, you can consult the package documentation and also you
+can begin with some [introductory articles on the AlgebraicJulia
+blog](https://blog.algebraicjulia.org/post/2020/09/cset-graphs-1/).
 
-We use `BasicSchema` to make a schema for the acset which will store the
-data. Note that `Catlab.jl` provides a much nicer macro `@present` for
-this, but we try to use as much as possible only the bare bones API from
-ACSets to avoid introducing too many category theoretic concepts. For
-us, it’s just a database schema.
-
-The only code from Catlab we need is the line below the schema where we
-display it graphically. Note that each “set” has turned into an object
-in the schema, and that the relations are also objects. There are
-projection maps from the relations into the sets which are involved in
-each relation. Each relation also has an arrow into `IntAttr` which will
-store the results of the binomial random draw that is used to “sparsify”
-the data.
+We use `@present` to make a schema for the acset which will store the
+data. Note that each “set” has turned into an object in the schema, and
+that the relations are also objects. There are projection maps from the
+relations into the sets which are involved in each relation. Each
+relation also has an arrow into `IntAttr` which will store the results
+of the binomial random draw that is used to “sparsify” the data.
 
 ``` julia
-IJKLMSch = BasicSchema(
-    # objects (primary keys)
-    [:I,:J,:K,:L,:M,:IJK,:JKL,:KLM], 
-    # homs (foreign keys)
-    [
-        (:IJK_I,:IJK,:I),
-        (:IJK_J,:IJK,:J),
-        (:IJK_K,:IJK,:K),
-        (:JKL_J,:JKL,:J),
-        (:JKL_K,:JKL,:K),
-        (:JKL_L,:JKL,:L),
-        (:KLM_K,:KLM,:K),
-        (:KLM_L,:KLM,:L),
-        (:KLM_M,:KLM,:M)
-    ], 
-    # attributes
-    [:IntAttr], 
-    # attribute columns (non foreign key data columns)
-    [
-        (:value_ijk,:IJK,:IntAttr),
-        (:value_jkl,:JKL,:IntAttr),
-        (:value_klm,:KLM,:IntAttr)
-    ]
-)
+@present IJKLMSch(FreeSchema) begin
+    (I,J,K,L,M,IJK,JKL,KLM)::Ob
+    IJK_I::Hom(IJK,I)
+    IJK_J::Hom(IJK,J)
+    IJK_K::Hom(IJK,K)
+    JKL_J::Hom(JKL,J)
+    JKL_K::Hom(JKL,K)
+    JKL_L::Hom(JKL,L)
+    KLM_K::Hom(KLM,K)
+    KLM_L::Hom(KLM,L)
+    KLM_M::Hom(KLM,M)
+    IntAttr::AttrType
+    value_ijk::Attr(IJK,IntAttr)
+    value_jkl::Attr(JKL,IntAttr)
+    value_klm::Attr(KLM,IntAttr)
+end
 
-Catlab.to_graphviz(Catlab.Presentation(IJKLMSch), graph_attrs=Dict(:dpi=>"72",:ratio=>"expand",:size=>"8"))
+Catlab.to_graphviz(IJKLMSch, graph_attrs=Dict(:dpi=>"72",:ratio=>"expand",:size=>"8"))
 ```
 
 ![](gams_files/figure-commonmark/cell-7-output-1.svg)
 
 Now we programatically generate the data type (and functions to work
 with it) for our schema, and fill it with data. The code is verbose, but
-we’re storing all the sets and relations in a single data structure, and
-also doing it without some of the categorical machinery from Catlab
-which would ease this.
+we’re storing all the sets and relations in a single data structure.
 
 ``` julia
 @acset_type IJKLMData(IJKLMSch, index=[:IJK_I,:IJK_J,:IJK_K,:JKL_J,:JKL_K,:JKL_L,:KLM_K,:KLM_L,:KLM_M])
@@ -384,11 +370,11 @@ ijklm_query[1:5,:] |> markdown_table
 
 | i   | j   | k   | l   | m   |
 |-----|-----|-----|-----|-----|
-| 16  | 2   | 6   | 15  | 6   |
-| 88  | 17  | 20  | 15  | 13  |
-| 29  | 16  | 6   | 10  | 9   |
-| 10  | 18  | 2   | 11  | 5   |
-| 57  | 18  | 10  | 11  | 15  |
+| 35  | 20  | 1   | 13  | 20  |
+| 35  | 20  | 1   | 13  | 5   |
+| 39  | 20  | 1   | 13  | 20  |
+| 39  | 20  | 1   | 13  | 5   |
+| 58  | 16  | 3   | 6   | 16  |
 
 Now that we know they are equal, we can go ahead and see how fast the
 acsets version is.
@@ -406,13 +392,13 @@ acsets version is.
 end
 ```
 
-    BenchmarkTools.Trial: 1222 samples with 1 evaluation.
-     Range (min … max):  3.373 ms … 24.939 ms  ┊ GC (min … max): 0.00% … 59.32%
-     Time  (median):     3.544 ms              ┊ GC (median):    0.00%
-     Time  (mean ± σ):   4.088 ms ±  1.624 ms  ┊ GC (mean ± σ):  6.84% ± 11.36%
+    BenchmarkTools.Trial: 1370 samples with 1 evaluation.
+     Range (min … max):  3.170 ms … 8.820 ms  ┊ GC (min … max): 0.00% … 45.39%
+     Time  (median):     3.282 ms             ┊ GC (median):    0.00%
+     Time  (mean ± σ):   3.646 ms ± 1.284 ms  ┊ GC (mean ± σ):  7.24% ± 11.64%
 
-      ▇█▅▅▄▃▂▁▁▁                                                  
-      ██████████▇▆▆▅▅▄▅▆▁▁▄▄▁▅▅▅▁▁▄▁▄▅▁▁▁▁▄▁▁▁▁▁▄▅▄▆▇▇▇██▆▆▆▅▄▄▄ █
-      3.37 ms      Histogram: log(frequency) by time     9.51 ms <
+      ▇█▃▁▂                                                ▁     
+      █████▆▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃▁▅▅▇█▇▇█ █
+      3.17 ms     Histogram: log(frequency) by time     8.58 ms <
 
-     Memory estimate: 3.00 MiB, allocs estimate: 27923.
+     Memory estimate: 3.01 MiB, allocs estimate: 28207.

@@ -24,7 +24,7 @@ The blog post calls subsets of Cartesian products "maps", which seems to be conf
 
 ## Data generation
 
-First we load some packages we'll need. `DataFrames` for dataframes, `Distributions` for sampling binomial random variates, `JuMP` to set up the model, `HiGHS` for a solver. `ACSets` are used as an alternative data structure for the model, and `Catlab` is just needed to plot the database schema (finite presentation of a category) used to represent the data.
+First we load some packages we'll need. `DataFrames` for data frames, `Distributions` for sampling binomial random variates, `JuMP` to set up the model, `HiGHS` for a solver. `Catlab` provides a new data structure, the C-Set which will be compared to the data frames method.
 
 ```{julia}
 #| output: false
@@ -32,7 +32,7 @@ First we load some packages we'll need. `DataFrames` for dataframes, `Distributi
 using DataFrames
 using Distributions
 using JuMP, HiGHS
-using ACSets, Catlab
+using Catlab
 using BenchmarkTools, MarkdownTables
 ```
 
@@ -145,42 +145,32 @@ end
 
 ## The acsets version
 
-Acsets (Attributed C-Sets) are a nifty data structure coming from applied category theory, but its not too far off to think of them just as in-memory relational databases. They are provided in the [ACSets.jl](https://github.com/AlgebraicJulia/ACSets.jl) library. One of the advantages of using acsets and categorical machinery in general is that they have a natural graphical presentation, which in many cases is very readable and illuminating.
+Acsets (Attributed C-Sets) are a nifty data structure coming from applied category theory, but its not too far off to think of them just as in-memory relational databases. They are provided in the [ACSets.jl](https://github.com/AlgebraicJulia/ACSets.jl) library, and imported and extended with machinery from applied category theory in [Catlab.jl](https://github.com/AlgebraicJulia/Catlab.jl). One of the advantages of using acsets and categorical machinery in general is that they have a natural graphical presentation, which in many cases is very readable and illuminating. To learn more about this data structure and many more topics, you can consult the package documentation and also you can begin with some [introductory articles on the AlgebraicJulia blog](https://blog.algebraicjulia.org/post/2020/09/cset-graphs-1/).
 
-We use `BasicSchema` to make a schema for the acset which will store the data. Note that `Catlab.jl` provides a much nicer macro `@present` for this, but we try to use as much as possible only the bare bones API from ACSets to avoid introducing too many category theoretic concepts. For us, it's just a database schema.
-
-The only code from Catlab we need is the line below the schema where we display it graphically. Note that each "set" has turned into an object in the schema, and that the relations are also objects. There are projection maps from the relations into the sets which are involved in each relation. Each relation also has an arrow into `IntAttr` which will store the results of the binomial random draw that is used to "sparsify" the data.
+We use `@present` to make a schema for the acset which will store the data. Note that each "set" has turned into an object in the schema, and that the relations are also objects. There are projection maps from the relations into the sets which are involved in each relation. Each relation also has an arrow into `IntAttr` which will store the results of the binomial random draw that is used to "sparsify" the data.
 
 ```{julia}
-IJKLMSch = BasicSchema(
-    # objects (primary keys)
-    [:I,:J,:K,:L,:M,:IJK,:JKL,:KLM], 
-    # homs (foreign keys)
-    [
-        (:IJK_I,:IJK,:I),
-        (:IJK_J,:IJK,:J),
-        (:IJK_K,:IJK,:K),
-        (:JKL_J,:JKL,:J),
-        (:JKL_K,:JKL,:K),
-        (:JKL_L,:JKL,:L),
-        (:KLM_K,:KLM,:K),
-        (:KLM_L,:KLM,:L),
-        (:KLM_M,:KLM,:M)
-    ], 
-    # attributes
-    [:IntAttr], 
-    # attribute columns (non foreign key data columns)
-    [
-        (:value_ijk,:IJK,:IntAttr),
-        (:value_jkl,:JKL,:IntAttr),
-        (:value_klm,:KLM,:IntAttr)
-    ]
-)
+@present IJKLMSch(FreeSchema) begin
+    (I,J,K,L,M,IJK,JKL,KLM)::Ob
+    IJK_I::Hom(IJK,I)
+    IJK_J::Hom(IJK,J)
+    IJK_K::Hom(IJK,K)
+    JKL_J::Hom(JKL,J)
+    JKL_K::Hom(JKL,K)
+    JKL_L::Hom(JKL,L)
+    KLM_K::Hom(KLM,K)
+    KLM_L::Hom(KLM,L)
+    KLM_M::Hom(KLM,M)
+    IntAttr::AttrType
+    value_ijk::Attr(IJK,IntAttr)
+    value_jkl::Attr(JKL,IntAttr)
+    value_klm::Attr(KLM,IntAttr)
+end
 
-Catlab.to_graphviz(Catlab.Presentation(IJKLMSch), graph_attrs=Dict(:dpi=>"72",:ratio=>"expand",:size=>"8"))
+Catlab.to_graphviz(IJKLMSch, graph_attrs=Dict(:dpi=>"72",:ratio=>"expand",:size=>"8"))
 ```
 
-Now we programatically generate the data type (and functions to work with it) for our schema, and fill it with data. The code is verbose, but we're storing all the sets and relations in a single data structure, and also doing it without some of the categorical machinery from Catlab which would ease this.
+Now we programatically generate the data type (and functions to work with it) for our schema, and fill it with data. The code is verbose, but we're storing all the sets and relations in a single data structure.
 
 ```{julia}
 @acset_type IJKLMData(IJKLMSch, index=[:IJK_I,:IJK_J,:IJK_K,:JKL_J,:JKL_K,:JKL_L,:KLM_K,:KLM_L,:KLM_M])
