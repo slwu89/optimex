@@ -6,7 +6,9 @@
 
 using DataFrames
 using Distributions
-using BenchmarkTools
+using JuMP, HiGHS
+using Catlab
+using BenchmarkTools, MarkdownTables
 
 SampleBinomialVec = function(A,B,C,p=0.05)
     vec = rand(Binomial(1, p), length(A) * length(B) * length(C))
@@ -16,8 +18,8 @@ SampleBinomialVec = function(A,B,C,p=0.05)
     return vec
 end
 
-n=8 # something large
-m=10 # 20
+n=100 # something large
+m=20 # 20
 
 # Sets IJKLM 
 I = ["i$x" for x in 1:n]
@@ -46,31 +48,6 @@ IJK_sparse = [(x.i, x.j, x.k) for x in eachrow(IJK) if x.value == true]
 JKL_sparse = [(x.j, x.k, x.l) for x in eachrow(JKL) if x.value == true]
 KLM_sparse = [(x.k, x.l, x.m) for x in eachrow(KLM) if x.value == true]
 
-# make the optim model
-using JuMP, HiGHS
-
-# # -----------------------------------------------
-# # the "intuitive" formulation --- the one to beat
-# @benchmark let 
-#     x_list = [
-#         (i, j, k, l, m)
-#         for (i, j, k) in IJK_sparse
-#         for (jj, kk, l) in JKL_sparse if jj == j && kk == k
-#         for (kkk, ll, m) in KLM_sparse if kkk == k && ll == l
-#     ]
-#     model = Model(HiGHS.Optimizer)
-#     set_silent(model)
-#     @variable(model, x[x_list] >= 0)
-#     @constraint(
-#         model,
-#         [i in I], 
-#         sum(x[k] for k in x_list if k[1] == i) >= 0
-#     )
-#     optimize!(model)
-# end
-
-# ----------------------
-# the DataFrames version
 IJK_sparse_df = filter(x -> x.value == 1, IJK)
 select!(IJK_sparse_df, Not(:value))
 
@@ -86,40 +63,25 @@ ijklm_df = DataFrames.innerjoin(
     on = [:k, :l],
 )
 
-# build model
-model = JuMP.Model(HiGHS.Optimizer)
-set_silent(model)
-ijklm_df[!, :x] = @variable(model, x[1:size(ijklm_df, 1)] >= 0)
-for df in DataFrames.groupby(ijklm_df, :i)
-    @constraint(model, sum(df.x) >= 0)
+# acsets
+@present IJKLMSch(FreeSchema) begin
+    (I,J,K,L,M,IJK,JKL,KLM)::Ob
+    IJK_I::Hom(IJK,I)
+    IJK_J::Hom(IJK,J)
+    IJK_K::Hom(IJK,K)
+    JKL_J::Hom(JKL,J)
+    JKL_K::Hom(JKL,K)
+    JKL_L::Hom(JKL,L)
+    KLM_K::Hom(KLM,K)
+    KLM_L::Hom(KLM,L)
+    KLM_M::Hom(KLM,M)
+    IntAttr::AttrType
+    value_ijk::Attr(IJK,IntAttr)
+    value_jkl::Attr(JKL,IntAttr)
+    value_klm::Attr(KLM,IntAttr)
 end
-optimize!(model)
 
-# ------------------
-# the acsets version
-
-using ACSets, Catlab
-
-IJKLMSch = BasicSchema(
-    [:I,:J,:K,:L,:M,:IJK,:JKL,:KLM], 
-    [
-        (:IJK_I,:IJK,:I),
-        (:IJK_J,:IJK,:J),
-        (:IJK_K,:IJK,:K),
-        (:JKL_J,:JKL,:J),
-        (:JKL_K,:JKL,:K),
-        (:JKL_L,:JKL,:L),
-        (:KLM_K,:KLM,:K),
-        (:KLM_L,:KLM,:L),
-        (:KLM_M,:KLM,:M)
-    ], 
-    [:IntAttr], 
-    [
-        (:value_ijk,:IJK,:IntAttr),
-        (:value_jkl,:JKL,:IntAttr),
-        (:value_klm,:KLM,:IntAttr)
-    ]
-)
+Catlab.to_graphviz(IJKLMSch, graph_attrs=Dict(:dpi=>"72",:ratio=>"expand",:size=>"8"))
 
 @acset_type IJKLMData(IJKLMSch, index=[:IJK_I,:IJK_J,:IJK_K,:JKL_J,:JKL_K,:JKL_L,:KLM_K,:KLM_L,:KLM_M])
 
@@ -151,7 +113,6 @@ add_parts!(
     IJK_I=vec([e[1] for e in ijk_prod]),
     IJK_J=vec([e[2] for e in ijk_prod]),
     IJK_K=vec([e[3] for e in ijk_prod]),
-    # value_ijk=SampleBinomialVec(I,J,K)
     value_ijk=IJK.value
 )
 
@@ -171,7 +132,6 @@ add_parts!(
     JKL_J=vec([e[1] for e in jkl_prod]),
     JKL_K=vec([e[2] for e in jkl_prod]),
     JKL_L=vec([e[3] for e in jkl_prod]),
-    # value_jkl=SampleBinomialVec(J,K,L)
     value_jkl=JKL.value
 )
 
@@ -191,7 +151,6 @@ add_parts!(
     KLM_K=vec([e[1] for e in klm_prod]),
     KLM_L=vec([e[2] for e in klm_prod]),
     KLM_M=vec([e[3] for e in klm_prod]),
-    # value_klm=SampleBinomialVec(K,L,M)
     value_klm=KLM.value
 )
 
@@ -207,61 +166,48 @@ connected_paths_query = @relation (i=i,j=j,k=k,l=l,m=m) begin
     KLM(KLM_K=k, KLM_L=l, KLM_M=m)
 end
 
-ijklm = query(ijklm_dat, connected_paths_query)
+Catlab.to_graphviz(connected_paths_query, box_labels=:name, junction_labels=:variable, graph_attrs=Dict(:dpi=>"72",:size=>"3.5",:ratio=>"expand"))
 
+query(ijklm_dat, connected_paths_query)
 
+# what about with data migration?
+using DataMigrations
 
-# we want to check this against the DataFrames version
-
-IJK_sparse_df = DataFrame(tables(ijklm_dat).IJK)
-select!(IJK_sparse_df, Not(:value_ijk))
-rename!(IJK_sparse_df, [:i,:j,:k])
-
-JKL_sparse_df = DataFrame(tables(ijklm_dat).JKL)
-select!(JKL_sparse_df, Not(:value_jkl))
-rename!(JKL_sparse_df, [:j,:k,:l])
-
-KLM_sparse_df = DataFrame(tables(ijklm_dat).KLM)
-select!(KLM_sparse_df, Not(:value_klm))
-rename!(KLM_sparse_df, [:k,:l,:m])
-
-ijklm_df = DataFrames.innerjoin(
-    DataFrames.innerjoin(IJK_sparse_df, JKL_sparse_df; on = [:j, :k]),
-    KLM_sparse_df;
-    on = [:k, :l],
-)
-
-sort(ijklm) == sort(ijklm_df)
-
-
-
-
-# # remove redundant things in I,J,K,L,M
-
-# # find parts of `ob` that are not hit by any incoming homs and remove them
-# function not_in_image(acs, ob)
-#     in_homs = homs(acset_schema(acs), to=ob, just_names=true)    
-#     hit_by = [length.(incident(acs, parts(acs, ob), f)) for f in in_homs]
-#     to_rem = Int[]
-#     for i in parts(acs, ob)
-#         if all([h[i] for h in hit_by] .== 0)
-#             push!(to_rem, i)
-#         end
-#     end
-#     return to_rem
-# end
-
-# # for I, find things with no in-homs
-# not_in_image(ijklm_dat, :I)
-
-# # for J, find things with no in-homs
-# not_in_image(ijklm_dat, :J)
-
-# # for K, find things with no in-homs
-# not_in_image(ijklm_dat, :K)
-
-# # L
-# not_in_image(ijklm_dat, :L)
-
-# # M
-# not_in_image(ijklm_dat, :M)
+M = @migration IJKLMSch IJKLMSch begin
+    # each Ob gets a diagram
+    # "set" objects
+    I => I
+    J => J
+    K => K
+    L => L
+    M => M
+    # "relation" objects
+    IJK => @join begin
+        i::I, j::J, k::K, ijk::IJK
+        IJK_I(ijk) == i
+        IJK_J(ijk) == j
+        IJK_K(ijk) == k
+    end
+    JKL => @join begin
+        j::J, k::K, l::K, jkl::JKL
+        JKL_J(jkl) == j
+        JKL_K(jkl) == k
+        JKL_L(jkl) == l
+    end
+    KLM => @join begin
+        k::K, l::L, m::M, klm::KLM
+        KLM_K(klm) == k
+        KLM_L(klm) == l
+        KLM_M(klm) == m
+    end
+    # each Hom gets a morphism of diagrams
+    IJK_I => i⋅id
+    IJK_J => j⋅id
+    IJK_K => k⋅id
+    JKL_J => j⋅id
+    JKL_K => k⋅id
+    JKL_L => l⋅id
+    KLM_K => k⋅id
+    KLM_L => l⋅id
+    KLM_M => m⋅id
+  end
