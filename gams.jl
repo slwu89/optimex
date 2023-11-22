@@ -10,6 +10,9 @@ using JuMP, HiGHS
 using Catlab
 using BenchmarkTools, MarkdownTables
 
+# --------------------------------------------------------------------------------
+# the IJKLM model
+
 SampleBinomialVec = function(A,B,C,p=0.05)
     vec = rand(Binomial(1, p), length(A) * length(B) * length(C))
     while sum(vec) == 0
@@ -170,44 +173,106 @@ Catlab.to_graphviz(connected_paths_query, box_labels=:name, junction_labels=:var
 
 query(ijklm_dat, connected_paths_query)
 
-# what about with data migration?
-using DataMigrations
 
-M = @migration IJKLMSch IJKLMSch begin
-    # each Ob gets a diagram
-    # "set" objects
-    I => I
-    J => J
-    K => K
-    L => L
-    M => M
-    # "relation" objects
-    IJK => @join begin
-        i::I, j::J, k::K, ijk::IJK
-        IJK_I(ijk) == i
-        IJK_J(ijk) == j
-        IJK_K(ijk) == k
+# --------------------------------------------------------------------------------
+# the supply chain model
+# translated from https://github.com/justine18/performance_experiment/blob/master/supply_chain/data_generation.py
+
+m=3
+n=4
+
+# "sets"
+J = ["j$x" for x in 1:m+1]
+K = ["k$x" for x in 1:m+1]
+L = ["l$x" for x in 1:m+1]
+M = ["m$x" for x in 1:m+1]
+
+
+I = ["f$x" for x in 1:n+1]
+
+share = Int(ceil(length(J) * 0.05))
+
+# IJ
+# draw a set of units j about to process product i
+IJ = Set([(i,j) for i in I for j in sample(J, share)])
+# make sure that every unit j is able to process at least one product i
+used_j = Set([j for (i,j) in IJ])
+for j in J
+    if j ∉ used_j
+        push!(
+            IJ, 
+            (only(sample(I,1)), j)
+        )
     end
-    JKL => @join begin
-        j::J, k::K, l::K, jkl::JKL
-        JKL_J(jkl) == j
-        JKL_K(jkl) == k
-        JKL_L(jkl) == l
+end
+
+
+# JK
+JK = Set([(j,k) for j in J for k in sample(K, share)])
+# make sure that every unit j is able to process at least one product i
+used_k = Set([k for (j,k) in JK])
+for k in K
+    if k ∉ used_k
+        push!(
+            JK,
+            (only(sample(J,1)), k)
+        )
     end
-    KLM => @join begin
-        k::K, l::L, m::M, klm::KLM
-        KLM_K(klm) == k
-        KLM_L(klm) == l
-        KLM_M(klm) == m
-    end
-    # each Hom gets a morphism of diagrams
-    IJK_I => i⋅id
-    IJK_J => j⋅id
-    IJK_K => k⋅id
-    JKL_J => j⋅id
-    JKL_K => k⋅id
-    JKL_L => l⋅id
-    KLM_K => k⋅id
-    KLM_L => l⋅id
-    KLM_M => m⋅id
-  end
+end
+
+# IK
+df_IJ = DataFrame(IJ, [:i, :j])
+df_JK = DataFrame(JK, [:j, :k])
+df_IJK = innerjoin(df_IJ, df_JK, on=[:j])
+IJK = Set([Tuple(r) for r in eachrow(df_IJK)])
+# reduce IJK by around 50%
+reduced_IJK = sample(collect(IJK), Int(ceil(length(IJK) * 0.5))) |> Set
+IK = Set([(i,k) for (i,j,k) in reduced_IJK])
+
+# KL & LM
+
+
+stop
+
+# # --------------------------------------------------------------------------------
+# # what about with data migration?
+# using DataMigrations
+
+# M = @migration IJKLMSch IJKLMSch begin
+#     # each Ob gets a diagram
+#     # "set" objects
+#     I => I
+#     J => J
+#     K => K
+#     L => L
+#     M => M
+#     # "relation" objects
+#     IJK => @join begin
+#         i::I, j::J, k::K, ijk::IJK
+#         IJK_I(ijk) == i
+#         IJK_J(ijk) == j
+#         IJK_K(ijk) == k
+#     end
+#     JKL => @join begin
+#         j::J, k::K, l::K, jkl::JKL
+#         JKL_J(jkl) == j
+#         JKL_K(jkl) == k
+#         JKL_L(jkl) == l
+#     end
+#     KLM => @join begin
+#         k::K, l::L, m::M, klm::KLM
+#         KLM_K(klm) == k
+#         KLM_L(klm) == l
+#         KLM_M(klm) == m
+#     end
+#     # each Hom gets a morphism of diagrams
+#     IJK_I => i⋅id
+#     IJK_J => j⋅id
+#     IJK_K => k⋅id
+#     JKL_J => j⋅id
+#     JKL_K => k⋅id
+#     JKL_L => l⋅id
+#     KLM_K => k⋅id
+#     KLM_L => l⋅id
+#     KLM_M => m⋅id
+#   end
