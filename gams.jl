@@ -187,7 +187,6 @@ K = ["k$x" for x in 1:m+1]
 L = ["l$x" for x in 1:m+1]
 M = ["m$x" for x in 1:m+1]
 
-
 I = ["f$x" for x in 1:n+1]
 
 share = Int(ceil(length(J) * 0.05))
@@ -230,9 +229,57 @@ reduced_IJK = sample(collect(IJK), Int(ceil(length(IJK) * 0.5))) |> Set
 IK = Set([(i,k) for (i,j,k) in reduced_IJK])
 
 # KL & LM
+KL = Set{Tuple{String,String}}()
+LM = Set{Tuple{String,String}}()
+for k in K
+    for m in M
+        ll = sample(L, share)
+        for l in ll
+            push!(KL, (k,l))
+            push!(LM, (l,m))
+        end
+    end
+end
+# does every l has a k
+used_l = Set([l for (k,l) in KL])
+for l in L
+    if l ∉ used_l
+        push!(KL, (only(sample(K,1)),l))
+    end
+end
+# does every l has an m
+used_l = Set([l for (l,m) in LM])
+for l in L
+    if l ∉ used_l
+        push!(LM, (l, only(sample(M,1))))
+    end
+end
+
+# IL, IM
+df_KL = DataFrame(KL, [:k,:l])
+df_LM = DataFrame(LM, [:l,:m])
+df_IJKLM = innerjoin(
+    innerjoin(
+        df_IJK, df_KL, 
+        on=[:k]
+    ),
+    df_LM, on=[:l]
+)
+IJKLM = [Tuple(r) for r in eachrow(df_IJKLM)]
+IL = Set([(i, l) for (i, j, k, l, m) in IJKLM])
+IM = Set([(i, m) for (i, j, k, l, m) in IJKLM])
 
 
-stop
+# IKL, ILM
+IKL = Set([(i, k, l) for (i, j, k, l, m) in IJKLM])
+ILM = Set([(i, l, m) for (i, j, k, l, m) in IJKLM])
+
+# Demand
+D = Dict([(i,m) => rand(0:100) for (i,m) in IM])
+
+
+
+
 
 # # --------------------------------------------------------------------------------
 # # what about with data migration?
