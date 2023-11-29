@@ -171,7 +171,55 @@ end
 
 Catlab.to_graphviz(connected_paths_query, box_labels=:name, junction_labels=:variable, graph_attrs=Dict(:dpi=>"72",:size=>"3.5",:ratio=>"expand"))
 
-query(ijklm_dat, connected_paths_query)
+ijklm_dat_res = query(ijklm_dat, connected_paths_query)
+
+# "rebuild" the subacset from the query result
+df_recoded = deepcopy(ijklm_dat_res)
+
+I = sort(unique(ijklm_dat_res.i))
+J = sort(unique(ijklm_dat_res.j))
+K = sort(unique(ijklm_dat_res.k))
+L = sort(unique(ijklm_dat_res.l))
+M = sort(unique(ijklm_dat_res.m))
+
+# rename the integers to be 1:size(Set)
+I_recode = Dict([i => ix for (ix,i) in enumerate(I)])
+J_recode = Dict([i => ix for (ix,i) in enumerate(J)])
+K_recode = Dict([i => ix for (ix,i) in enumerate(K)])
+L_recode = Dict([i => ix for (ix,i) in enumerate(L)])
+M_recode = Dict([i => ix for (ix,i) in enumerate(M)])
+
+df_recoded.i = map(x->I_recode[x],df_recoded.i)
+df_recoded.j = map(x->J_recode[x],df_recoded.j)
+df_recoded.k = map(x->K_recode[x],df_recoded.k)
+df_recoded.l = map(x->L_recode[x],df_recoded.l)
+df_recoded.m = map(x->M_recode[x],df_recoded.m)
+
+ijklm_dat_rebuild = IJKLMData{Int}()
+
+add_parts!(ijklm_dat_rebuild, :I, length(I))
+add_parts!(ijklm_dat_rebuild, :J, length(J))
+add_parts!(ijklm_dat_rebuild, :K, length(K))
+add_parts!(ijklm_dat_rebuild, :L, length(L))
+add_parts!(ijklm_dat_rebuild, :M, length(M))
+
+for r in eachrow(unique(df_recoded[:,[:i,:j,:k]]))
+    add_part!(ijklm_dat_rebuild, :IJK, IJK_I = r.i, IJK_J = r.j, IJK_K = r.k)
+end
+
+for r in eachrow(unique(df_recoded[:,[:j,:k,:l]]))
+    add_part!(ijklm_dat_rebuild, :JKL, JKL_J = r.j, JKL_K = r.k, JKL_L = r.l)
+end
+
+for r in eachrow(unique(df_recoded[:,[:k,:l,:m]]))
+    add_part!(ijklm_dat_rebuild, :KLM, KLM_K = r.k, KLM_L = r.l, KLM_M = r.m)
+end
+
+query(ijklm_dat_rebuild, connected_paths_query)
+
+
+# const dontuseme = 0
+
 
 
 # --------------------------------------------------------------------------------
@@ -182,14 +230,46 @@ m=3
 n=4
 
 # "sets"
+I = ["i$x" for x in 1:n+1]
 J = ["j$x" for x in 1:m+1]
 K = ["k$x" for x in 1:m+1]
 L = ["l$x" for x in 1:m+1]
 M = ["m$x" for x in 1:m+1]
 
-I = ["f$x" for x in 1:n+1]
-
 share = Int(ceil(length(J) * 0.05))
+
+
+# acsets version
+# acsets
+@present SupplySch(FreeSchema) begin
+    # "set" Obs
+    (I,J,K,L,M)::Ob
+    # binary relation Obs
+    (IK,IL,IM)::Ob
+    # ternary relation Obs
+    (IJK,IKL,ILM)::Ob
+    # projections from binary relations
+    IK_I::Hom(IK,I)
+    IK_K::Hom(IK,K)
+    IL_I::Hom(IL,I)
+    IL_L::Hom(IL,L)
+    IM_I::Hom(IM,I)
+    IM_M::Hom(IM,M)
+    # projections from ternary relations
+    IJK_I::Hom(IJK,I)
+    IJK_J::Hom(IJK,J)
+    IJK_K::Hom(IJK,K)
+    IKL_I::Hom(IKL,I)
+    IKL_K::Hom(IKL,K)
+    IKL_L::Hom(IKL,L)
+    ILM_I::Hom(ILM,I)
+    ILM_L::Hom(ILM,L)
+    ILM_M::Hom(ILM,M)
+end
+
+# to_graphviz(SupplySch,graph_attrs=Dict(:dpi=>"72",:size=>"6",:ratio=>"expand"))
+
+# existing version at: https://github.com/justine18/performance_experiment/blob/master/supply_chain/data_generation.py
 
 # IJ
 # draw a set of units j about to process product i
