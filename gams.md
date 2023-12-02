@@ -49,7 +49,7 @@ the C-Set which will be compared to the data frames method.
 using DataFrames
 using Distributions
 using JuMP, HiGHS
-using Catlab
+using Catlab, DataMigrations
 using BenchmarkTools, MarkdownTables
 ```
 
@@ -122,16 +122,16 @@ As we know this is the slow one.
 end
 ```
 
-    BenchmarkTools.Trial: 204 samples with 1 evaluation.
-     Range (min … max):  23.139 ms …  27.440 ms  ┊ GC (min … max):  9.11% … 15.04%
-     Time  (median):     24.799 ms               ┊ GC (median):    13.47%
-     Time  (mean ± σ):   24.551 ms ± 815.388 μs  ┊ GC (mean ± σ):  12.68% ±  2.53%
+    BenchmarkTools.Trial: 177 samples with 1 evaluation.
+     Range (min … max):  25.667 ms … 32.003 ms  ┊ GC (min … max): 11.55% … 21.00%
+     Time  (median):     28.721 ms              ┊ GC (median):    19.73%
+     Time  (mean ± σ):   28.288 ms ±  1.541 ms  ┊ GC (mean ± σ):  17.52% ±  4.03%
 
-       ▁     ▁▄▇▁                            ▃▆▃ ▁▁ ▄ ▃▁ █▁▁█▆      
-      ▄█▇▄▄▇▆████▇▃▁▁▁▄▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃▁▄▇▆▄███▆██▆█▆██▄█████▆▇▃▃ ▄
-      23.1 ms         Histogram: frequency by time         25.5 ms <
+       ▁                         █ ▇▇ ▁   ▁                        
+      ▆███▅▄▆▄▄▄▁▁▃▁▁▁▃▁▄▃▃▄▁▁▃▃▆████▆█▅▆▆█▄▄▁▃▁▃▃▃▃▁▃▃▄▃▄▃▁▁▁▃▁▃ ▃
+      25.7 ms         Histogram: frequency by time        31.8 ms <
 
-     Memory estimate: 73.83 MiB, allocs estimate: 1574666.
+     Memory estimate: 73.70 MiB, allocs estimate: 1562508.
 
 ## The DataFrames version
 
@@ -173,16 +173,16 @@ Let’s benchmark it.
 end
 ```
 
-    BenchmarkTools.Trial: 1540 samples with 1 evaluation.
-     Range (min … max):  2.851 ms … 8.153 ms  ┊ GC (min … max): 0.00% … 46.05%
-     Time  (median):     2.992 ms             ┊ GC (median):    0.00%
-     Time  (mean ± σ):   3.246 ms ± 1.105 ms  ┊ GC (mean ± σ):  5.95% ± 10.29%
+    BenchmarkTools.Trial: 1224 samples with 1 evaluation.
+     Range (min … max):  3.592 ms … 12.352 ms  ┊ GC (min … max): 0.00% … 38.47%
+     Time  (median):     3.718 ms              ┊ GC (median):    0.00%
+     Time  (mean ± σ):   4.083 ms ±  1.375 ms  ┊ GC (mean ± σ):  6.73% ± 11.46%
 
-      ▆█▄                                                     ▁  
-      ███▇▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▅▇██ █
-      2.85 ms     Histogram: log(frequency) by time     7.95 ms <
+      ▇█▄▂                                                   ▁    
+      ████▇▄▇▅▄▁▁▄▄▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▁▅▇██▇▇ █
+      3.59 ms      Histogram: log(frequency) by time     9.62 ms <
 
-     Memory estimate: 2.38 MiB, allocs estimate: 21949.
+     Memory estimate: 2.65 MiB, allocs estimate: 22493.
 
 ## The acsets version
 
@@ -312,11 +312,13 @@ rem_parts!(
 )
 ```
 
+### conjunctive queries on acsets
+
 Now, the critical thing that the JuMP devs did to speed thing up was to
 replace the for loops with 2 inner joins, to get the “paths” through the
-relations. How to do this with acsets? Well we can execute a conjunctive
-query on the acset to get the same thing. This is described in a [post
-at the AlgebraicJulia
+relations. How to do this with acsets? Well one thing we can do is
+execute a conjunctive query on the acset to get the same thing. This is
+described in a [post at the AlgebraicJulia
 blog](https://blog.algebraicjulia.org/post/2020/12/cset-conjunctive-queries/).
 
 ``` julia
@@ -343,7 +345,7 @@ that will be returned as the result of the query. The rows that are
 returned from the query come from filtering the Cartesian product of the
 tables (nodes) such that variables in columns match according to ports
 that share a junction. In this case, it is equivalent to the two inner
-joins as done above using DataFrames.
+joins done above using DataFrames.
 
 The JuMP blog post notes that while the data frames version doesn’t
 resemble the nested summation it is arguably just as readable,
@@ -370,14 +372,19 @@ ijklm_query[1:5,:] |> markdown_table
 
 | i   | j   | k   | l   | m   |
 |-----|-----|-----|-----|-----|
-| 35  | 20  | 1   | 13  | 20  |
-| 35  | 20  | 1   | 13  | 5   |
-| 39  | 20  | 1   | 13  | 20  |
-| 39  | 20  | 1   | 13  | 5   |
-| 58  | 16  | 3   | 6   | 16  |
+| 24  | 16  | 17  | 5   | 19  |
+| 24  | 16  | 17  | 2   | 19  |
+| 38  | 15  | 11  | 15  | 6   |
+| 26  | 18  | 20  | 8   | 20  |
+| 26  | 18  | 20  | 8   | 16  |
 
 Now that we know they are equal, we can go ahead and see how fast the
-acsets version is.
+acsets version is. The fact that the acsets based query is right on the
+tails of the `DataFrames` version is a performance win for the acsets
+library, as it is usually a generic conjunctive query engine across very
+general data structures (i.e., acsets are in general much more complex
+than a single dataframe, due to presence of multiple tables connected
+via foreign keys).
 
 ``` julia
 @benchmark let
@@ -392,13 +399,157 @@ acsets version is.
 end
 ```
 
-    BenchmarkTools.Trial: 1370 samples with 1 evaluation.
-     Range (min … max):  3.170 ms … 8.820 ms  ┊ GC (min … max): 0.00% … 45.39%
-     Time  (median):     3.282 ms             ┊ GC (median):    0.00%
-     Time  (mean ± σ):   3.646 ms ± 1.284 ms  ┊ GC (mean ± σ):  7.24% ± 11.64%
+    BenchmarkTools.Trial: 1094 samples with 1 evaluation.
+     Range (min … max):  4.002 ms … 10.789 ms  ┊ GC (min … max): 0.00% … 47.69%
+     Time  (median):     4.131 ms              ┊ GC (median):    0.00%
+     Time  (mean ± σ):   4.567 ms ±  1.352 ms  ┊ GC (mean ± σ):  7.01% ± 12.06%
 
-      ▇█▃▁▂                                                ▁     
-      █████▆▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃▁▅▅▇█▇▇█ █
-      3.17 ms     Histogram: log(frequency) by time     8.58 ms <
+      ▇█▄▂▁▃▃                                             ▁       
+      ███████▆▆▄▅▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▇███▇▆▅ ▇
+      4 ms         Histogram: log(frequency) by time     9.53 ms <
 
-     Memory estimate: 3.01 MiB, allocs estimate: 28207.
+     Memory estimate: 3.37 MiB, allocs estimate: 28890.
+
+### data migrations of acsets
+
+While the query execution in the previous section is already quite
+useful for practical application, it does have one downside, and that is
+the type of the return object is a `DataFrame`. While this is
+appropriate for many cases, one of the benefits of acsets is that, from
+one point of view, they are in-memory relational databases, and are
+therefore capable of representing data that is not possible to do with a
+single table. Therefore, it would be nice if one could execute a *data
+migration* from one type of acset, where “type” means the schema, to
+another, that is able to carry along further data we need. For more
+details on contravariant data migration, please see Evan Patterson’s
+Topos Institute colloquium presentation [“Categories of diagrams in data
+migration and computational
+physics”](https://www.youtube.com/live/Ra-PLnog_M0?si=1_ex4wLud2hSR7be).
+
+In this context, if the “set” objects (`I`, `J`, etc) were further
+connected to other tables, maybe, say, a list of suppliers, or a list of
+materials, or even a process graph of downstream work, it would be
+inconvenient at least, if we lost that relational information during a
+query. In that case, we’d really want to return *another acset* on a
+different schema that is precisely the right shape for what we want to
+do.
+
+In this simple case, we have a quite simple schema which looks like a
+starfish. However, if some of the “set” objects had further morphisms to
+other objects (i.e., other tables), the advantages of using data
+migration become apparent.
+
+``` julia
+@present IJKLMRelSch(FreeSchema) begin
+    (IJKLM,I,J,K,L,M)::Ob
+    i::Hom(IJKLM,I)
+    j::Hom(IJKLM,J)
+    k::Hom(IJKLM,K)
+    l::Hom(IJKLM,L)
+    m::Hom(IJKLM,M)
+end
+
+@acset_type IJKLMRelType(IJKLMRelSch)
+
+Catlab.to_graphviz(IJKLMRelSch, graph_attrs=Dict(:dpi=>"72",:ratio=>"expand",:size=>"3.5"))
+```
+
+![](gams_files/figure-commonmark/cell-13-output-1.svg)
+
+Now we formulate the data migration, using tools from the
+[AlgebraicJulia/DataMigrations.jl](https://github.com/AlgebraicJulia/DataMigrations.jl)
+package. While we will not be able to rigorously explain data migration
+here, if one has $C$-Set (instance of data on schema $C$) and wants to
+migrate it to a $D$-Set, a data migration functor $F$ needs to be
+specified.
+
+Here, $C$ is our schema `IJKLMSch` and $D$ is `IJKLMRelSch`. The functor
+$F$ is a mapping from $D$ to the category of diagrams on $C$; formally
+we denote it $F:D\rightarrow \text{Diag}^{\text{op}}(C)$. Each object in
+$D$ gets assigned a diagram into $C$, and morphisms in $D$ get assigned
+to contravariant morphisms of diagrams.
+
+``` julia
+M = @migration IJKLMRelSch IJKLMSch begin
+    IJKLM => @join begin
+        ijk::IJK
+        jkl::JKL
+        klm::KLM
+        i::I
+        j::J
+        k::K
+        l::L
+        m::M
+        IJK_I(ijk) == i
+        IJK_J(ijk) == j
+        JKL_J(jkl) == j
+        IJK_K(ijk) == k
+        JKL_K(jkl) == k
+        KLM_K(klm) == k
+        JKL_L(jkl) == l
+        KLM_L(klm) == l
+        KLM_M(klm) == m
+    end
+    I => I
+    J => J
+    K => K
+    L => L
+    M => M
+    i => i
+    j => j
+    k => k
+    l => l
+    m => m
+end
+```
+
+    DataMigration{Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, TypeCat{SimpleDiagram{GATlab.Stdlib.StdModels.op, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, D} where D<:(Functor{<:Category{Ob, Hom, Catlab.CategoricalAlgebra.FinCats.FinCatSize} where {Ob, Hom}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}}), Catlab.CategoricalAlgebra.Diagrams.SimpleDiagramHom{GATlab.Stdlib.StdModels.op, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Any, Any}}, Catlab.CategoricalAlgebra.FinCats.FinTransformationMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Any, Any}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}}, Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:id}}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:generator}}}}}, Dict{Symbol, SimpleDiagram{GATlab.Stdlib.StdModels.op, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, D} where D<:(Functor{<:Category{Ob, Hom, Catlab.CategoricalAlgebra.FinCats.FinCatSize} where {Ob, Hom}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}})}, Dict{Symbol, Catlab.CategoricalAlgebra.Diagrams.SimpleDiagramHom{GATlab.Stdlib.StdModels.op, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Any, Any}}, Catlab.CategoricalAlgebra.FinCats.FinTransformationMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Any, Any}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}}, Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:id}}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:generator}}}}}}, Dict{Any, Union{}}}(FinDomFunctor(Dict{Symbol, SimpleDiagram{GATlab.Stdlib.StdModels.op, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, D} where D<:(Functor{<:Category{Ob, Hom, Catlab.CategoricalAlgebra.FinCats.FinCatSize} where {Ob, Hom}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}})}(:IJKLM => Diagram{op}(FinFunctor(Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}(:l => L, :m => M, :klm => KLM, :k => K, :ijk => IJK, :j => J, :jkl => JKL, :i => I), Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:generator}}(Symbol("##unnamedhom#9") => KLM_M, Symbol("##unnamedhom#5") => JKL_K, Symbol("##unnamedhom#1") => IJK_I, Symbol("##unnamedhom#4") => IJK_K, Symbol("##unnamedhom#3") => JKL_J, Symbol("##unnamedhom#2") => IJK_J, Symbol("##unnamedhom#6") => KLM_K, Symbol("##unnamedhom#8") => KLM_L, Symbol("##unnamedhom#7") => JKL_L), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[ijk, jkl, klm, i, j, k, l, m], Hom = Hom{:generator}[##unnamedhom#1, ##unnamedhom#2, ##unnamedhom#3, ##unnamedhom#4, ##unnamedhom#5, ##unnamedhom#6, ##unnamedhom#7, ##unnamedhom#8, ##unnamedhom#9], AttrType = AttrType{:generator}[], Attr = Attr{:generator}[]), Dict(:j=>(:Ob=>5), Symbol("##unnamedhom#4")=>(:Hom=>4), Symbol("##unnamedhom#8")=>(:Hom=>8), Symbol("##unnamedhom#9")=>(:Hom=>9), :l=>(:Ob=>7), :jkl=>(:Ob=>2), Symbol("##unnamedhom#7")=>(:Hom=>7), Symbol("##unnamedhom#5")=>(:Hom=>5), :ijk=>(:Ob=>1), :klm=>(:Ob=>3)…), Pair[])), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[I, J, K, L, M, IJK, JKL, KLM], Hom = Hom{:generator}[IJK_I, IJK_J, IJK_K, JKL_J, JKL_K, JKL_L, KLM_K, KLM_L, KLM_M], AttrType = AttrType{:generator}[IntAttr], Attr = Attr{:generator}[value_ijk, value_jkl, value_klm]), Dict(:KLM=>(:Ob=>8), :IJK_J=>(:Hom=>2), :IntAttr=>(:AttrType=>1), :JKL=>(:Ob=>7), :JKL_J=>(:Hom=>4), :IJK=>(:Ob=>6), :K=>(:Ob=>3), :KLM_L=>(:Hom=>8), :JKL_K=>(:Hom=>5), :M=>(:Ob=>5)…), Pair[])))), :I => Diagram{op}(FinFunctor(Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}(:I => I), Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}(), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[I], Hom = Hom{:generator}[], AttrType = AttrType{:generator}[], Attr = Attr{:generator}[]), Dict(:I=>(:Ob=>1)), Pair[])), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[I, J, K, L, M, IJK, JKL, KLM], Hom = Hom{:generator}[IJK_I, IJK_J, IJK_K, JKL_J, JKL_K, JKL_L, KLM_K, KLM_L, KLM_M], AttrType = AttrType{:generator}[IntAttr], Attr = Attr{:generator}[value_ijk, value_jkl, value_klm]), Dict(:KLM=>(:Ob=>8), :IJK_J=>(:Hom=>2), :IntAttr=>(:AttrType=>1), :JKL=>(:Ob=>7), :JKL_J=>(:Hom=>4), :IJK=>(:Ob=>6), :K=>(:Ob=>3), :KLM_L=>(:Hom=>8), :JKL_K=>(:Hom=>5), :M=>(:Ob=>5)…), Pair[])))), :M => Diagram{op}(FinFunctor(Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}(:M => M), Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}(), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[M], Hom = Hom{:generator}[], AttrType = AttrType{:generator}[], Attr = Attr{:generator}[]), Dict(:M=>(:Ob=>1)), Pair[])), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[I, J, K, L, M, IJK, JKL, KLM], Hom = Hom{:generator}[IJK_I, IJK_J, IJK_K, JKL_J, JKL_K, JKL_L, KLM_K, KLM_L, KLM_M], AttrType = AttrType{:generator}[IntAttr], Attr = Attr{:generator}[value_ijk, value_jkl, value_klm]), Dict(:KLM=>(:Ob=>8), :IJK_J=>(:Hom=>2), :IntAttr=>(:AttrType=>1), :JKL=>(:Ob=>7), :JKL_J=>(:Hom=>4), :IJK=>(:Ob=>6), :K=>(:Ob=>3), :KLM_L=>(:Hom=>8), :JKL_K=>(:Hom=>5), :M=>(:Ob=>5)…), Pair[])))), :J => Diagram{op}(FinFunctor(Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}(:J => J), Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}(), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[J], Hom = Hom{:generator}[], AttrType = AttrType{:generator}[], Attr = Attr{:generator}[]), Dict(:J=>(:Ob=>1)), Pair[])), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[I, J, K, L, M, IJK, JKL, KLM], Hom = Hom{:generator}[IJK_I, IJK_J, IJK_K, JKL_J, JKL_K, JKL_L, KLM_K, KLM_L, KLM_M], AttrType = AttrType{:generator}[IntAttr], Attr = Attr{:generator}[value_ijk, value_jkl, value_klm]), Dict(:KLM=>(:Ob=>8), :IJK_J=>(:Hom=>2), :IntAttr=>(:AttrType=>1), :JKL=>(:Ob=>7), :JKL_J=>(:Hom=>4), :IJK=>(:Ob=>6), :K=>(:Ob=>3), :KLM_L=>(:Hom=>8), :JKL_K=>(:Hom=>5), :M=>(:Ob=>5)…), Pair[])))), :K => Diagram{op}(FinFunctor(Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}(:K => K), Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}(), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[K], Hom = Hom{:generator}[], AttrType = AttrType{:generator}[], Attr = Attr{:generator}[]), Dict(:K=>(:Ob=>1)), Pair[])), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[I, J, K, L, M, IJK, JKL, KLM], Hom = Hom{:generator}[IJK_I, IJK_J, IJK_K, JKL_J, JKL_K, JKL_L, KLM_K, KLM_L, KLM_M], AttrType = AttrType{:generator}[IntAttr], Attr = Attr{:generator}[value_ijk, value_jkl, value_klm]), Dict(:KLM=>(:Ob=>8), :IJK_J=>(:Hom=>2), :IntAttr=>(:AttrType=>1), :JKL=>(:Ob=>7), :JKL_J=>(:Hom=>4), :IJK=>(:Ob=>6), :K=>(:Ob=>3), :KLM_L=>(:Hom=>8), :JKL_K=>(:Hom=>5), :M=>(:Ob=>5)…), Pair[])))), :L => Diagram{op}(FinFunctor(Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}(:L => L), Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}(), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[L], Hom = Hom{:generator}[], AttrType = AttrType{:generator}[], Attr = Attr{:generator}[]), Dict(:L=>(:Ob=>1)), Pair[])), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[I, J, K, L, M, IJK, JKL, KLM], Hom = Hom{:generator}[IJK_I, IJK_J, IJK_K, JKL_J, JKL_K, JKL_L, KLM_K, KLM_L, KLM_M], AttrType = AttrType{:generator}[IntAttr], Attr = Attr{:generator}[value_ijk, value_jkl, value_klm]), Dict(:KLM=>(:Ob=>8), :IJK_J=>(:Hom=>2), :IntAttr=>(:AttrType=>1), :JKL=>(:Ob=>7), :JKL_J=>(:Hom=>4), :IJK=>(:Ob=>6), :K=>(:Ob=>3), :KLM_L=>(:Hom=>8), :JKL_K=>(:Hom=>5), :M=>(:Ob=>5)…), Pair[]))))), Dict{Symbol, Catlab.CategoricalAlgebra.Diagrams.SimpleDiagramHom{GATlab.Stdlib.StdModels.op, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Any, Any}}, Catlab.CategoricalAlgebra.FinCats.FinTransformationMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Any, Any}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}}, Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:id}}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:generator}}}}}(:l => DiagramHom{op}([(l, id(L))], [], FinFunctor(Dict{Symbol, Ob{:generator}}(:l=>L, :m=>M, :klm=>KLM, :k=>K, :ijk=>IJK, :j=>J, :jkl=>JKL, :i=>I), Dict{Symbol, Hom{:generator}}(Symbol("##unnamedhom#9")=>KLM_M, Symbol("##unnamedhom#5")=>JKL_K, Symbol("##unnamedhom#1")=>IJK_I, Symbol("##unnamedhom#4")=>IJK_K, Symbol("##unnamedhom#3")=>JKL_J, Symbol("##unnamedhom#2")=>IJK_J, Symbol("##unnamedhom#6")=>KLM_K, Symbol("##unnamedhom#8")=>KLM_L, Symbol("##unnamedhom#7")=>JKL_L), …), FinFunctor(Dict{Symbol, Ob{:generator}}(:L=>L), Dict{Symbol, Union{Attr, AttrType, Hom}}(), …)), :m => DiagramHom{op}([(m, id(M))], [], FinFunctor(Dict{Symbol, Ob{:generator}}(:l=>L, :m=>M, :klm=>KLM, :k=>K, :ijk=>IJK, :j=>J, :jkl=>JKL, :i=>I), Dict{Symbol, Hom{:generator}}(Symbol("##unnamedhom#9")=>KLM_M, Symbol("##unnamedhom#5")=>JKL_K, Symbol("##unnamedhom#1")=>IJK_I, Symbol("##unnamedhom#4")=>IJK_K, Symbol("##unnamedhom#3")=>JKL_J, Symbol("##unnamedhom#2")=>IJK_J, Symbol("##unnamedhom#6")=>KLM_K, Symbol("##unnamedhom#8")=>KLM_L, Symbol("##unnamedhom#7")=>JKL_L), …), FinFunctor(Dict{Symbol, Ob{:generator}}(:M=>M), Dict{Symbol, Union{Attr, AttrType, Hom}}(), …)), :k => DiagramHom{op}([(k, id(K))], [], FinFunctor(Dict{Symbol, Ob{:generator}}(:l=>L, :m=>M, :klm=>KLM, :k=>K, :ijk=>IJK, :j=>J, :jkl=>JKL, :i=>I), Dict{Symbol, Hom{:generator}}(Symbol("##unnamedhom#9")=>KLM_M, Symbol("##unnamedhom#5")=>JKL_K, Symbol("##unnamedhom#1")=>IJK_I, Symbol("##unnamedhom#4")=>IJK_K, Symbol("##unnamedhom#3")=>JKL_J, Symbol("##unnamedhom#2")=>IJK_J, Symbol("##unnamedhom#6")=>KLM_K, Symbol("##unnamedhom#8")=>KLM_L, Symbol("##unnamedhom#7")=>JKL_L), …), FinFunctor(Dict{Symbol, Ob{:generator}}(:K=>K), Dict{Symbol, Union{Attr, AttrType, Hom}}(), …)), :j => DiagramHom{op}([(j, id(J))], [], FinFunctor(Dict{Symbol, Ob{:generator}}(:l=>L, :m=>M, :klm=>KLM, :k=>K, :ijk=>IJK, :j=>J, :jkl=>JKL, :i=>I), Dict{Symbol, Hom{:generator}}(Symbol("##unnamedhom#9")=>KLM_M, Symbol("##unnamedhom#5")=>JKL_K, Symbol("##unnamedhom#1")=>IJK_I, Symbol("##unnamedhom#4")=>IJK_K, Symbol("##unnamedhom#3")=>JKL_J, Symbol("##unnamedhom#2")=>IJK_J, Symbol("##unnamedhom#6")=>KLM_K, Symbol("##unnamedhom#8")=>KLM_L, Symbol("##unnamedhom#7")=>JKL_L), …), FinFunctor(Dict{Symbol, Ob{:generator}}(:J=>J), Dict{Symbol, Union{Attr, AttrType, Hom}}(), …)), :i => DiagramHom{op}([(i, id(I))], [], FinFunctor(Dict{Symbol, Ob{:generator}}(:l=>L, :m=>M, :klm=>KLM, :k=>K, :ijk=>IJK, :j=>J, :jkl=>JKL, :i=>I), Dict{Symbol, Hom{:generator}}(Symbol("##unnamedhom#9")=>KLM_M, Symbol("##unnamedhom#5")=>JKL_K, Symbol("##unnamedhom#1")=>IJK_I, Symbol("##unnamedhom#4")=>IJK_K, Symbol("##unnamedhom#3")=>JKL_J, Symbol("##unnamedhom#2")=>IJK_J, Symbol("##unnamedhom#6")=>KLM_K, Symbol("##unnamedhom#8")=>KLM_L, Symbol("##unnamedhom#7")=>JKL_L), …), FinFunctor(Dict{Symbol, Ob{:generator}}(:I=>I), Dict{Symbol, Union{Attr, AttrType, Hom}}(), …))), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[IJKLM, I, J, K, L, M], Hom = Hom{:generator}[i, j, k, l, m], AttrType = AttrType{:generator}[], Attr = Attr{:generator}[]), Dict(:j=>(:Hom=>2), :l=>(:Hom=>4), :IJKLM=>(:Ob=>1), :K=>(:Ob=>4), :M=>(:Ob=>6), :k=>(:Hom=>3), :m=>(:Hom=>5), :I=>(:Ob=>2), :J=>(:Ob=>3), :L=>(:Ob=>5)…), Pair[])), TypeCat(SimpleDiagram{GATlab.Stdlib.StdModels.op, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, D} where D<:(Functor{<:Category{Ob, Hom, Catlab.CategoricalAlgebra.FinCats.FinCatSize} where {Ob, Hom}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}}), Catlab.CategoricalAlgebra.Diagrams.SimpleDiagramHom{GATlab.Stdlib.StdModels.op, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Any, Any}}, Catlab.CategoricalAlgebra.FinCats.FinTransformationMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Any, Any}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}}, Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:id}}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:generator}}}})), Dict{Any, Union{}}())
+
+A diagram is itself a functor $D:J\rightarrow C$, where $J$ is (usually)
+a small category, and $D$ will point at some instance of the diagram in
+$C$. We can plot what the largest diagram looks like, that which object
+`IJKLM` in $D$ is mapped to. Note the similarity to the conjunctive
+query visualized as a UWD previously. In particular, note that
+“relation” elements must agree upon the relevant “set” elements via
+their morphisms. The object in $C$ that each object in $J$ corresponds
+to is given by the text after the colon in the relevant node.
+
+``` julia
+F = functor(M)
+to_graphviz(F.ob_map[:IJKLM],node_labels=true)
+```
+
+![](gams_files/figure-commonmark/cell-15-output-1.svg)
+
+Because of the simplicity of the schema `IJKLMRelSch`, the contravariant
+morphisms of diagrams simply pick out the object in $D$ associated with
+the source of the morphism. Likewise, the natural transformation part of
+morphisms of diagrams simply selects for each object its identity
+morphism.
+
+We run the data migration to move data from the schema `IJKLMSch` to
+`IJKLMRelSch` using the function `migrate`, and check that the result
+has the same number of records as other methods.
+
+``` julia
+ijklm_migrate_acset = migrate(IJKLMRelType, ijklm_dat, M)
+nparts(ijklm_migrate_acset, :IJKLM) == size(ijklm_query,1)
+```
+
+    true
+
+Let’s look at the first few rows.
+
+``` julia
+pretty_tables(ijklm_migrate_acset, tables=[:IJKLM], max_num_of_rows=5)
+```
+
+    ┌───────┬────┬────┬────┬────┬────┐
+    │ IJKLM │  i │  j │  k │  l │  m │
+    ├───────┼────┼────┼────┼────┼────┤
+    │     1 │ 24 │ 16 │ 17 │  5 │ 19 │
+    │     2 │ 24 │ 16 │ 17 │  2 │ 19 │
+    │     3 │ 38 │ 15 │ 11 │ 15 │  6 │
+    │     4 │ 26 │ 18 │ 20 │  8 │ 20 │
+    │     5 │ 26 │ 18 │ 20 │  8 │ 16 │
+    └───────┴────┴────┴────┴────┴────┘

@@ -32,7 +32,7 @@ First we load some packages we'll need. `DataFrames` for data frames, `Distribut
 using DataFrames
 using Distributions
 using JuMP, HiGHS
-using Catlab
+using Catlab, DataMigrations
 using BenchmarkTools, MarkdownTables
 ```
 
@@ -251,7 +251,9 @@ rem_parts!(
 )
 ```
 
-Now, the critical thing that the JuMP devs did to speed thing up was to replace the for loops with 2 inner joins, to get the "paths" through the relations. How to do this with acsets? Well we can execute a conjunctive query on the acset to get the same thing. This is described in a [post at the AlgebraicJulia blog](https://blog.algebraicjulia.org/post/2020/12/cset-conjunctive-queries/).
+### conjunctive queries on acsets
+
+Now, the critical thing that the JuMP devs did to speed thing up was to replace the for loops with 2 inner joins, to get the "paths" through the relations. How to do this with acsets? Well one thing we can do is execute a conjunctive query on the acset to get the same thing. This is described in a [post at the AlgebraicJulia blog](https://blog.algebraicjulia.org/post/2020/12/cset-conjunctive-queries/).
 
 ```{julia}
 connected_paths_query = @relation (i=i,j=j,k=k,l=l,m=m) begin
@@ -278,7 +280,7 @@ size(ijklm_query) == size(ijklm_df)
 ijklm_query[1:5,:] |> markdown_table
 ```
 
-Now that we know they are equal, we can go ahead and see how fast the acsets version is.
+Now that we know they are equal, we can go ahead and see how fast the acsets version is. The fact that the acsets based query is right on the tails of the `DataFrames` version is a performance win for the acsets library, as it is usually a generic conjunctive query engine across very general data structures (i.e., acsets are in general much more complex than a single dataframe, due to presence of multiple tables connected via foreign keys).
 
 ```{julia}
 @benchmark let
@@ -291,4 +293,87 @@ Now that we know they are equal, we can go ahead and see how fast the acsets ver
     end
     optimize!(model)
 end
+```
+
+### data migrations of acsets
+
+While the query execution in the previous section is already quite useful for practical application, it does have one downside, and that is the type of the return object is a `DataFrame`. While this is appropriate for many cases, one of the benefits of acsets is that, from one point of view, they are in-memory relational databases, and are therefore capable of representing data that is not possible to do with a single table. Therefore, it would be nice if one could execute a _data migration_ from one type of acset, where "type" means the schema, to another, that is able to carry along further data we need. For more details on contravariant data migration, please see Evan Patterson's Topos Institute colloquium presentation ["Categories of diagrams in data migration and computational physics"](https://www.youtube.com/live/Ra-PLnog_M0?si=1_ex4wLud2hSR7be).
+
+In this context, if the "set" objects (`I`, `J`, etc) were further connected to other tables, maybe, say, a list of suppliers, or a list of materials, or even a process graph of downstream work, it would be inconvenient at least, if we lost that relational information during a query. In that case, we'd really want to return _another acset_ on a different schema that is precisely the right shape for what we want to do.
+
+In this simple case, we have a quite simple schema which looks like a starfish. However, if some of the "set" objects had further morphisms to other objects (i.e., other tables), the advantages of using data migration become apparent.
+
+```{julia}
+@present IJKLMRelSch(FreeSchema) begin
+    (IJKLM,I,J,K,L,M)::Ob
+    i::Hom(IJKLM,I)
+    j::Hom(IJKLM,J)
+    k::Hom(IJKLM,K)
+    l::Hom(IJKLM,L)
+    m::Hom(IJKLM,M)
+end
+
+@acset_type IJKLMRelType(IJKLMRelSch)
+
+Catlab.to_graphviz(IJKLMRelSch, graph_attrs=Dict(:dpi=>"72",:ratio=>"expand",:size=>"3.5"))
+```
+
+Now we formulate the data migration, using tools from the [AlgebraicJulia/DataMigrations.jl](https://github.com/AlgebraicJulia/DataMigrations.jl) package. While we will not be able to rigorously explain data migration here, if one has $C$-Set (instance of data on schema $C$) and wants to migrate it to a $D$-Set, a data migration functor $F$ needs to be specified. 
+
+Here, $C$ is our schema `IJKLMSch` and $D$ is `IJKLMRelSch`. The functor $F$ is a mapping from $D$ to the category of diagrams on $C$; formally we denote it $F:D\rightarrow \text{Diag}^{\text{op}}(C)$. Each object in $D$ gets assigned a diagram into $C$, and morphisms in $D$ get assigned to contravariant morphisms of diagrams.
+
+```{julia}
+M = @migration IJKLMRelSch IJKLMSch begin
+    IJKLM => @join begin
+        ijk::IJK
+        jkl::JKL
+        klm::KLM
+        i::I
+        j::J
+        k::K
+        l::L
+        m::M
+        IJK_I(ijk) == i
+        IJK_J(ijk) == j
+        JKL_J(jkl) == j
+        IJK_K(ijk) == k
+        JKL_K(jkl) == k
+        KLM_K(klm) == k
+        JKL_L(jkl) == l
+        KLM_L(klm) == l
+        KLM_M(klm) == m
+    end
+    I => I
+    J => J
+    K => K
+    L => L
+    M => M
+    i => i
+    j => j
+    k => k
+    l => l
+    m => m
+end
+```
+
+A diagram is itself a functor $D:J\rightarrow C$, where $J$ is (usually) a small category, and $D$ will point at some instance of the diagram in $C$. We can plot what the largest diagram looks like, that which object `IJKLM` in $D$ is mapped to. Note the similarity to the conjunctive query visualized as a UWD previously. In particular, note that "relation" elements must agree upon the relevant "set" elements via their morphisms. The object in $C$ that each object in $J$ corresponds to is given by the text after the colon in the relevant node.
+
+```{julia}
+F = functor(M)
+to_graphviz(F.ob_map[:IJKLM],node_labels=true)
+```
+
+Because of the simplicity of the schema `IJKLMRelSch`, the contravariant morphisms of diagrams simply pick out the object in $D$ associated with the source of the morphism. Likewise, the natural transformation part of morphisms of diagrams simply selects for each object its identity morphism.
+
+We run the data migration to move data from the schema `IJKLMSch` to `IJKLMRelSch` using the function `migrate`, and check that the result has the same number of records as other methods.
+
+```{julia}
+ijklm_migrate_acset = migrate(IJKLMRelType, ijklm_dat, M)
+nparts(ijklm_migrate_acset, :IJKLM) == size(ijklm_query,1)
+```
+
+Let's look at the first few rows.
+
+```{julia}
+pretty_tables(ijklm_migrate_acset, tables=[:IJKLM], max_num_of_rows=5)
 ```

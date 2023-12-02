@@ -7,12 +7,12 @@
 using DataFrames
 using Distributions
 using JuMP, HiGHS
-using Catlab
+using Catlab, DataMigrations
 using BenchmarkTools, MarkdownTables
 
-# --------------------------------------------------------------------------------
-# the IJKLM model
 
+# --------------------------------------------------------------------------------
+# synethetic data for the IJKLM model
 SampleBinomialVec = function(A,B,C,p=0.05)
     vec = rand(Binomial(1, p), length(A) * length(B) * length(C))
     while sum(vec) == 0
@@ -51,6 +51,29 @@ IJK_sparse = [(x.i, x.j, x.k) for x in eachrow(IJK) if x.value == true]
 JKL_sparse = [(x.j, x.k, x.l) for x in eachrow(JKL) if x.value == true]
 KLM_sparse = [(x.k, x.l, x.m) for x in eachrow(KLM) if x.value == true]
 
+# --------------------------------------------------------------------------------
+# the "intuitive" formulation
+
+# wrap this in a benchmark call for the qmd
+x_list = [
+    (i, j, k, l, m)
+    for (i, j, k) in IJK_sparse
+    for (jj, kk, l) in JKL_sparse if jj == j && kk == k
+    for (kkk, ll, m) in KLM_sparse if kkk == k && ll == l
+]
+model = JuMP.Model(HiGHS.Optimizer)
+set_silent(model)
+@variable(model, x[x_list] >= 0)
+@constraint(
+    model,
+    [i in I], 
+    sum(x[k] for k in x_list if k[1] == i) >= 0
+)
+optimize!(model)
+
+
+# --------------------------------------------------------------------------------
+# the "dataframes" formulation
 IJK_sparse_df = filter(x -> x.value == 1, IJK)
 select!(IJK_sparse_df, Not(:value))
 
@@ -66,6 +89,9 @@ ijklm_df = DataFrames.innerjoin(
     on = [:k, :l],
 )
 
+# benchmark it
+
+# --------------------------------------------------------------------------------
 # acsets
 @present IJKLMSch(FreeSchema) begin
     (I,J,K,L,M,IJK,JKL,KLM)::Ob
@@ -163,6 +189,10 @@ rem_parts!(
     findall(ijklm_dat[:,:value_klm] .== 0)
 )
 
+
+# --------------------------------------------------------------------------------
+# conjunctive query on acset method
+
 connected_paths_query = @relation (i=i,j=j,k=k,l=l,m=m) begin
     IJK(IJK_I=i, IJK_J=j, IJK_K=k)
     JKL(JKL_J=j, JKL_K=k, JKL_L=l)
@@ -171,8 +201,84 @@ end
 
 Catlab.to_graphviz(connected_paths_query, box_labels=:name, junction_labels=:variable, graph_attrs=Dict(:dpi=>"72",:size=>"3.5",:ratio=>"expand"))
 
-ijklm_dat_res = query(ijklm_dat, connected_paths_query)
+ijklm_query_df = query(ijklm_dat, connected_paths_query)
+size(ijklm_query_df) == size(ijklm_df)
 
+# benchmark it below
+
+
+# --------------------------------------------------------------------------------
+# data migration
+
+# schema for the 
+@present IJKLMRelSch(FreeSchema) begin
+    (IJKLM,I,J,K,L,M)::Ob
+    i::Hom(IJKLM,I)
+    j::Hom(IJKLM,J)
+    k::Hom(IJKLM,K)
+    l::Hom(IJKLM,L)
+    m::Hom(IJKLM,M)
+end
+
+Catlab.to_graphviz(IJKLMRelSch, graph_attrs=Dict(:dpi=>"72",:ratio=>"expand",:size=>"3.5"))
+
+@acset_type IJKLMRelType(IJKLMRelSch)
+
+M = @migration IJKLMRelSch IJKLMSch begin
+    IJKLM => @join begin
+        ijk::IJK
+        jkl::JKL
+        klm::KLM
+        i::I
+        j::J
+        k::K
+        l::L
+        m::M
+        IJK_I(ijk) == i
+        IJK_J(ijk) == j
+        JKL_J(jkl) == j
+        IJK_K(ijk) == k
+        JKL_K(jkl) == k
+        KLM_K(klm) == k
+        JKL_L(jkl) == l
+        KLM_L(klm) == l
+        KLM_M(klm) == m
+    end
+    I => I
+    J => J
+    K => K
+    L => L
+    M => M
+    i => i
+    j => j
+    k => k
+    l => l
+    m => m
+end
+
+F = functor(M)
+
+# look at the most important diagram
+to_graphviz(F.ob_map[:IJKLM],node_labels=true)
+
+ijklm_migrate_acset = migrate(IJKLMRelType, ijklm_dat, M)
+nparts(ijklm_migrate_acset, :IJKLM) == size(ijklm_query_df,1)
+
+
+pretty_tables(ijklm_migrate_acset, tables=[:IJKLM], max_num_of_rows=5)
+
+
+# benchmark it
+
+
+
+
+
+
+
+
+
+# --------------------------------------------------------------------------------
 # "rebuild" the subacset from the query result
 df_recoded = deepcopy(ijklm_dat_res)
 
@@ -215,191 +321,142 @@ for r in eachrow(unique(df_recoded[:,[:k,:l,:m]]))
     add_part!(ijklm_dat_rebuild, :KLM, KLM_K = r.k, KLM_L = r.l, KLM_M = r.m)
 end
 
-query(ijklm_dat_rebuild, connected_paths_query)
+ijklm_dat_rebuild_res = query(ijklm_dat_rebuild, connected_paths_query)
 
-
-# const dontuseme = 0
-
-
-
-# --------------------------------------------------------------------------------
-# the supply chain model
-# translated from https://github.com/justine18/performance_experiment/blob/master/supply_chain/data_generation.py
-
-m=3
-n=4
-
-# "sets"
-I = ["i$x" for x in 1:n+1]
-J = ["j$x" for x in 1:m+1]
-K = ["k$x" for x in 1:m+1]
-L = ["l$x" for x in 1:m+1]
-M = ["m$x" for x in 1:m+1]
-
-share = Int(ceil(length(J) * 0.05))
-
-
-# acsets version
-# acsets
-@present SupplySch(FreeSchema) begin
-    # "set" Obs
-    (I,J,K,L,M)::Ob
-    # binary relation Obs
-    (IK,IL,IM)::Ob
-    # ternary relation Obs
-    (IJK,IKL,ILM)::Ob
-    # projections from binary relations
-    IK_I::Hom(IK,I)
-    IK_K::Hom(IK,K)
-    IL_I::Hom(IL,I)
-    IL_L::Hom(IL,L)
-    IM_I::Hom(IM,I)
-    IM_M::Hom(IM,M)
-    # projections from ternary relations
-    IJK_I::Hom(IJK,I)
-    IJK_J::Hom(IJK,J)
-    IJK_K::Hom(IJK,K)
-    IKL_I::Hom(IKL,I)
-    IKL_K::Hom(IKL,K)
-    IKL_L::Hom(IKL,L)
-    ILM_I::Hom(ILM,I)
-    ILM_L::Hom(ILM,L)
-    ILM_M::Hom(ILM,M)
-end
-
-# to_graphviz(SupplySch,graph_attrs=Dict(:dpi=>"72",:size=>"6",:ratio=>"expand"))
-
-# existing version at: https://github.com/justine18/performance_experiment/blob/master/supply_chain/data_generation.py
-
-# IJ
-# draw a set of units j about to process product i
-IJ = Set([(i,j) for i in I for j in sample(J, share)])
-# make sure that every unit j is able to process at least one product i
-used_j = Set([j for (i,j) in IJ])
-for j in J
-    if j ∉ used_j
-        push!(
-            IJ, 
-            (only(sample(I,1)), j)
-        )
-    end
-end
-
-
-# JK
-JK = Set([(j,k) for j in J for k in sample(K, share)])
-# make sure that every unit j is able to process at least one product i
-used_k = Set([k for (j,k) in JK])
-for k in K
-    if k ∉ used_k
-        push!(
-            JK,
-            (only(sample(J,1)), k)
-        )
-    end
-end
-
-# IK
-df_IJ = DataFrame(IJ, [:i, :j])
-df_JK = DataFrame(JK, [:j, :k])
-df_IJK = innerjoin(df_IJ, df_JK, on=[:j])
-IJK = Set([Tuple(r) for r in eachrow(df_IJK)])
-# reduce IJK by around 50%
-reduced_IJK = sample(collect(IJK), Int(ceil(length(IJK) * 0.5))) |> Set
-IK = Set([(i,k) for (i,j,k) in reduced_IJK])
-
-# KL & LM
-KL = Set{Tuple{String,String}}()
-LM = Set{Tuple{String,String}}()
-for k in K
-    for m in M
-        ll = sample(L, share)
-        for l in ll
-            push!(KL, (k,l))
-            push!(LM, (l,m))
-        end
-    end
-end
-# does every l has a k
-used_l = Set([l for (k,l) in KL])
-for l in L
-    if l ∉ used_l
-        push!(KL, (only(sample(K,1)),l))
-    end
-end
-# does every l has an m
-used_l = Set([l for (l,m) in LM])
-for l in L
-    if l ∉ used_l
-        push!(LM, (l, only(sample(M,1))))
-    end
-end
-
-# IL, IM
-df_KL = DataFrame(KL, [:k,:l])
-df_LM = DataFrame(LM, [:l,:m])
-df_IJKLM = innerjoin(
-    innerjoin(
-        df_IJK, df_KL, 
-        on=[:k]
-    ),
-    df_LM, on=[:l]
-)
-IJKLM = [Tuple(r) for r in eachrow(df_IJKLM)]
-IL = Set([(i, l) for (i, j, k, l, m) in IJKLM])
-IM = Set([(i, m) for (i, j, k, l, m) in IJKLM])
-
-
-# IKL, ILM
-IKL = Set([(i, k, l) for (i, j, k, l, m) in IJKLM])
-ILM = Set([(i, l, m) for (i, j, k, l, m) in IJKLM])
-
-# Demand
-D = Dict([(i,m) => rand(0:100) for (i,m) in IM])
-
-
-
-
+# should have same number of results
+size(ijklm_dat_res,1) == size(ijklm_dat_rebuild_res,1)
 
 # # --------------------------------------------------------------------------------
-# # what about with data migration?
-# using DataMigrations
+# # the supply chain model
+# # translated from https://github.com/justine18/performance_experiment/blob/master/supply_chain/data_generation.py
 
-# M = @migration IJKLMSch IJKLMSch begin
-#     # each Ob gets a diagram
-#     # "set" objects
-#     I => I
-#     J => J
-#     K => K
-#     L => L
-#     M => M
-#     # "relation" objects
-#     IJK => @join begin
-#         i::I, j::J, k::K, ijk::IJK
-#         IJK_I(ijk) == i
-#         IJK_J(ijk) == j
-#         IJK_K(ijk) == k
+# m=3
+# n=4
+
+# # "sets"
+# I = ["i$x" for x in 1:n+1]
+# J = ["j$x" for x in 1:m+1]
+# K = ["k$x" for x in 1:m+1]
+# L = ["l$x" for x in 1:m+1]
+# M = ["m$x" for x in 1:m+1]
+
+# share = Int(ceil(length(J) * 0.05))
+
+
+# # acsets version
+# # acsets
+# @present SupplySch(FreeSchema) begin
+#     # "set" Obs
+#     (I,J,K,L,M)::Ob
+#     # binary relation Obs
+#     (IK,IL,IM)::Ob
+#     # ternary relation Obs
+#     (IJK,IKL,ILM)::Ob
+#     # projections from binary relations
+#     IK_I::Hom(IK,I)
+#     IK_K::Hom(IK,K)
+#     IL_I::Hom(IL,I)
+#     IL_L::Hom(IL,L)
+#     IM_I::Hom(IM,I)
+#     IM_M::Hom(IM,M)
+#     # projections from ternary relations
+#     IJK_I::Hom(IJK,I)
+#     IJK_J::Hom(IJK,J)
+#     IJK_K::Hom(IJK,K)
+#     IKL_I::Hom(IKL,I)
+#     IKL_K::Hom(IKL,K)
+#     IKL_L::Hom(IKL,L)
+#     ILM_I::Hom(ILM,I)
+#     ILM_L::Hom(ILM,L)
+#     ILM_M::Hom(ILM,M)
+# end
+
+# # to_graphviz(SupplySch,graph_attrs=Dict(:dpi=>"72",:size=>"6",:ratio=>"expand"))
+
+# # existing version at: https://github.com/justine18/performance_experiment/blob/master/supply_chain/data_generation.py
+
+# # IJ
+# # draw a set of units j about to process product i
+# IJ = Set([(i,j) for i in I for j in sample(J, share)])
+# # make sure that every unit j is able to process at least one product i
+# used_j = Set([j for (i,j) in IJ])
+# for j in J
+#     if j ∉ used_j
+#         push!(
+#             IJ, 
+#             (only(sample(I,1)), j)
+#         )
 #     end
-#     JKL => @join begin
-#         j::J, k::K, l::K, jkl::JKL
-#         JKL_J(jkl) == j
-#         JKL_K(jkl) == k
-#         JKL_L(jkl) == l
+# end
+
+
+# # JK
+# JK = Set([(j,k) for j in J for k in sample(K, share)])
+# # make sure that every unit j is able to process at least one product i
+# used_k = Set([k for (j,k) in JK])
+# for k in K
+#     if k ∉ used_k
+#         push!(
+#             JK,
+#             (only(sample(J,1)), k)
+#         )
 #     end
-#     KLM => @join begin
-#         k::K, l::L, m::M, klm::KLM
-#         KLM_K(klm) == k
-#         KLM_L(klm) == l
-#         KLM_M(klm) == m
+# end
+
+# # IK
+# df_IJ = DataFrame(IJ, [:i, :j])
+# df_JK = DataFrame(JK, [:j, :k])
+# df_IJK = innerjoin(df_IJ, df_JK, on=[:j])
+# IJK = Set([Tuple(r) for r in eachrow(df_IJK)])
+# # reduce IJK by around 50%
+# reduced_IJK = sample(collect(IJK), Int(ceil(length(IJK) * 0.5))) |> Set
+# IK = Set([(i,k) for (i,j,k) in reduced_IJK])
+
+# # KL & LM
+# KL = Set{Tuple{String,String}}()
+# LM = Set{Tuple{String,String}}()
+# for k in K
+#     for m in M
+#         ll = sample(L, share)
+#         for l in ll
+#             push!(KL, (k,l))
+#             push!(LM, (l,m))
+#         end
 #     end
-#     # each Hom gets a morphism of diagrams
-#     IJK_I => i⋅id
-#     IJK_J => j⋅id
-#     IJK_K => k⋅id
-#     JKL_J => j⋅id
-#     JKL_K => k⋅id
-#     JKL_L => l⋅id
-#     KLM_K => k⋅id
-#     KLM_L => l⋅id
-#     KLM_M => m⋅id
-#   end
+# end
+# # does every l has a k
+# used_l = Set([l for (k,l) in KL])
+# for l in L
+#     if l ∉ used_l
+#         push!(KL, (only(sample(K,1)),l))
+#     end
+# end
+# # does every l has an m
+# used_l = Set([l for (l,m) in LM])
+# for l in L
+#     if l ∉ used_l
+#         push!(LM, (l, only(sample(M,1))))
+#     end
+# end
+
+# # IL, IM
+# df_KL = DataFrame(KL, [:k,:l])
+# df_LM = DataFrame(LM, [:l,:m])
+# df_IJKLM = innerjoin(
+#     innerjoin(
+#         df_IJK, df_KL, 
+#         on=[:k]
+#     ),
+#     df_LM, on=[:l]
+# )
+# IJKLM = [Tuple(r) for r in eachrow(df_IJKLM)]
+# IL = Set([(i, l) for (i, j, k, l, m) in IJKLM])
+# IM = Set([(i, m) for (i, j, k, l, m) in IJKLM])
+
+
+# # IKL, ILM
+# IKL = Set([(i, k, l) for (i, j, k, l, m) in IJKLM])
+# ILM = Set([(i, l, m) for (i, j, k, l, m) in IJKLM])
+
+# # Demand
+# D = Dict([(i,m) => rand(0:100) for (i,m) in IM])
