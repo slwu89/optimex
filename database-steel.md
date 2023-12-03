@@ -24,18 +24,27 @@ transformations to intermediate materials occur, and finished materials
 leave. Profit is total revenue from finished products, minus costs of
 raw materials and transformations.
 
-Model has some stuff: \* Materials: all the physical stuff, including
-raw, intermediate, and finished materials. Each have data on: - cost per
-unit for buying, min/max quantities that can be bought - revenue per
-unit for selling, and min/quantities that can be sold - raw materials
-can only be bought, finished can only be sold, intermediates often
-neither. We can also have list of allowed conversions to other
-materials, with given yield and cost per unit converted. \* Facilities:
-places at which transformations occur. They may have data on: - min/max
-on overall capacity - min/max on total use of each input - min/max on
-total use of each outptu \* Activities: housed in facilities. Activities
-use and produce materials in certain proportions. Each activity at a
-facilities has the following data: - Amount of each input for unit of
-activity - Amount of each output for unit of activity - Cost per unit of
-activity - min/max on units of activity - units of activity that can be
-accomodated by one unit of the owning facility’s overall capacity
+Model has some stuff:
+
+- Materials: all the physical stuff, including raw, intermediate, and
+  finished materials. Each have data on:
+  - cost per unit for buying, min/max quantities that can be bought
+  - revenue per unit for selling, and min/quantities that can be sold
+  - raw materials can only be bought, finished can only be sold,
+    intermediates often neither. We can also have list of allowed
+    conversions to other materials, with given yield and cost per unit
+    converted.
+- Facilities: places at which transformations occur. They may have data
+  on:
+  - min/max on overall capacity
+  - min/max on total use of each input
+  - min/max on total use of each output
+- Activities: housed in facilities. Activities use and produce materials
+  in certain proportions. Each activity at a facilities has the
+  following data:
+  - Amount of each input for unit of activity
+  - Amount of each output for unit of activity
+  - Cost per unit of activity
+  - min/max on units of activity
+  - units of activity that can be accomodated by one unit of the owning
+    facility’s overall capacity
