@@ -198,5 +198,5 @@ We kept the names of the attribute columns the same as the paper, but changed th
     act_out_rate::Attr(Aout,RealType)
 end
 
-Catlab.to_graphviz(ProductionSch,graph_attrs=Dict(:dpi=>"72",:size=>"4",:ratio=>"expand"))
+Catlab.to_graphviz(ProductionSch,graph_attrs=Dict(:dpi=>"60",:size=>"8",:ratio=>"expand"))
 ```

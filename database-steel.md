@@ -242,7 +242,7 @@ attribute.
     act_out_rate::Attr(Aout,RealType)
 end
 
-Catlab.to_graphviz(ProductionSch,graph_attrs=Dict(:dpi=>"72",:size=>"4",:ratio=>"expand"))
+Catlab.to_graphviz(ProductionSch,graph_attrs=Dict(:dpi=>"60",:size=>"8",:ratio=>"expand"))
 ```
 
 ![](database-steel_files/figure-commonmark/cell-4-output-1.svg)
