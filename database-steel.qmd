@@ -32,7 +32,7 @@ For each $i\in\mathcal{I}$ we have the data:
 
 For each $j\in\mathcal{J}$ we have the data:
 
-  * $x_{j}$: actual value of the decision variable
+  * $x_{j}$: actual value of the decision variable (post-optimization; not required to _set up_ the LP problem)
   * $c_{j}$: profit (if positive) or cost (if negative) per unit of the variable
   * $l_{j}^{\text{col}}$: lower limit on variable $j$
   * $u_{j}^{\text{col}}$: upper limit on variable $j$
@@ -53,6 +53,31 @@ $$
 $$
 
 If the middle sum is slightly ambigious, it means there is an outer loop over $i\in\mathcal{I}$ and the inner summation is over $j\in\mathcal{J}$ associated to that $i$.
+
+### Relational database for LP model
+
+The paper describes how to use the relational interpretation to build a database representation of the general LP problem. Let's just use Catlab to visualize the schema they propose. We use the names of the previous section, in the paper our `I` would be their `CONSTRAINTS`, `J` their `VARIABLES` and `C` their `COEFFICIENTS`.
+
+```{julia}
+using Catlab
+
+@present GeneralSch(FreeSchema) begin
+    (I,J,C)::Ob
+    i::Hom(C,I)
+    j::Hom(C,J)
+    RealType::AttrType
+    row_min::Attr(I,RealType)
+    row_max::Attr(I,RealType)
+    col_profit::Attr(J,RealType)
+    col_min::Attr(J,RealType)
+    col_optimal::Attr(J,RealType)
+    col_max::Attr(J,RealType)
+end
+
+Catlab.to_graphviz(GeneralSch,graph_attrs=Dict(:dpi=>"72",:size=>"4",:ratio=>"expand"))
+```
+
+It's immediately obvious why $\mathcal{C}$ is a relation in the database sense.
 
 ## Basic process model
 
