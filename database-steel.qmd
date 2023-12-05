@@ -200,3 +200,12 @@ end
 
 Catlab.to_graphviz(ProductionSch,graph_attrs=Dict(:dpi=>"60",:size=>"8",:ratio=>"expand"))
 ```
+
+## Implementation
+
+The paper describes a process to use the methods presented in the paper:
+
+  1. Assemble data in the schema for the input data, here `ProductionSch`.
+  2. Extract bounds and nonzero coefficients of the associated linear program, and store in one of the database schemas for the general LP problem.
+  3. Solve the LP problem and enter optimal values in the appropriate fields of the database.
+  4. Display and print the results.
