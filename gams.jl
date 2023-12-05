@@ -202,9 +202,19 @@ end
 Catlab.to_graphviz(connected_paths_query, box_labels=:name, junction_labels=:variable, graph_attrs=Dict(:dpi=>"72",:size=>"3.5",:ratio=>"expand"))
 
 ijklm_query_df = query(ijklm_dat, connected_paths_query)
-size(ijklm_query_df) == size(ijklm_df)
+# size(ijklm_query_df) == size(ijklm_df)
 
 # benchmark it below
+# @benchmark let
+    # ijklm = query(ijklm_dat, connected_paths_query)
+    # model = JuMP.Model(HiGHS.Optimizer)
+    # set_silent(model)
+    # ijklm[!, :x] = @variable(model, x[1:size(ijklm, 1)] >= 0)
+    # for df in DataFrames.groupby(ijklm, :i)
+    #     @constraint(model, sum(df.x) >= 0)
+    # end
+    # optimize!(model)
+# end
 
 
 # --------------------------------------------------------------------------------
@@ -222,7 +232,7 @@ end
 
 Catlab.to_graphviz(IJKLMRelSch, graph_attrs=Dict(:dpi=>"72",:ratio=>"expand",:size=>"3.5"))
 
-@acset_type IJKLMRelType(IJKLMRelSch)
+@acset_type IJKLMRelType(IJKLMRelSch, index=[:i,:j,:k,:l,:m])
 
 M = @migration IJKLMRelSch IJKLMSch begin
     IJKLM => @join begin
@@ -264,13 +274,20 @@ to_graphviz(F.ob_map[:IJKLM],node_labels=true)
 ijklm_migrate_acset = migrate(IJKLMRelType, ijklm_dat, M)
 nparts(ijklm_migrate_acset, :IJKLM) == size(ijklm_query_df,1)
 
-
 pretty_tables(ijklm_migrate_acset, tables=[:IJKLM], max_num_of_rows=5)
 
 
+lens = [length(incident(ijklm_migrate_acset, i, :i)) for i in parts(ijklm_migrate_acset,:I)]
+
+
 # benchmark it
-
-
+model = JuMP.Model(HiGHS.Optimizer)
+set_silent(model)
+@variable(model, x[parts(ijklm_migrate_acset,:IJKLM)] >= 0)
+for i in parts(ijklm_migrate_acset,:I)
+    @constraint(model, sum(x[incident(ijklm_migrate_acset,i,:i)]) >= 0)
+end
+optimize!(model)
 
 
 

@@ -377,3 +377,18 @@ Let's look at the first few rows.
 ```{julia}
 pretty_tables(ijklm_migrate_acset, tables=[:IJKLM], max_num_of_rows=5)
 ```
+
+Once again, let's benchmark:
+
+```{julia}
+@benchmark let
+    ijklm = migrate(IJKLMRelType, ijklm_dat, M)
+    model = JuMP.Model(HiGHS.Optimizer)
+    set_silent(model)
+    @variable(model, x[parts(ijklm,:IJKLM)] >= 0)
+    for i in parts(ijklm,:I)
+        @constraint(model, sum(x[incident(ijklm,i,:i)]) >= 0)
+    end
+    optimize!(model)
+end
+```

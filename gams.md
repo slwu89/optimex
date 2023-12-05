@@ -122,16 +122,16 @@ As we know this is the slow one.
 end
 ```
 
-    BenchmarkTools.Trial: 177 samples with 1 evaluation.
-     Range (min … max):  25.667 ms … 32.003 ms  ┊ GC (min … max): 11.55% … 21.00%
-     Time  (median):     28.721 ms              ┊ GC (median):    19.73%
-     Time  (mean ± σ):   28.288 ms ±  1.541 ms  ┊ GC (mean ± σ):  17.52% ±  4.03%
+    BenchmarkTools.Trial: 167 samples with 1 evaluation.
+     Range (min … max):  27.004 ms … 35.219 ms  ┊ GC (min … max):  7.59% … 14.08%
+     Time  (median):     29.646 ms              ┊ GC (median):    13.17%
+     Time  (mean ± σ):   29.978 ms ±  1.554 ms  ┊ GC (mean ± σ):  12.29% ±  2.25%
 
-       ▁                         █ ▇▇ ▁   ▁                        
-      ▆███▅▄▆▄▄▄▁▁▃▁▁▁▃▁▄▃▃▄▁▁▃▃▆████▆█▅▆▆█▄▄▁▃▁▃▃▃▃▁▃▃▄▃▄▃▁▁▁▃▁▃ ▃
-      25.7 ms         Histogram: frequency by time        31.8 ms <
+                     █▃   ▃                                        
+      ▅▁▄▆▃▃▅▁▁▄▃▄▃▅███▄▆▆█▆▇▃▆▃█▄▇▆▆▅▄▆▇▆▃▄▄▃▅▃▆▅▃▃▁▃▄▁▃▃▃▁▁▃▁▁▃ ▃
+      27 ms           Histogram: frequency by time          34 ms <
 
-     Memory estimate: 73.70 MiB, allocs estimate: 1562508.
+     Memory estimate: 79.13 MiB, allocs estimate: 1679535.
 
 ## The DataFrames version
 
@@ -173,16 +173,16 @@ Let’s benchmark it.
 end
 ```
 
-    BenchmarkTools.Trial: 1224 samples with 1 evaluation.
-     Range (min … max):  3.592 ms … 12.352 ms  ┊ GC (min … max): 0.00% … 38.47%
-     Time  (median):     3.718 ms              ┊ GC (median):    0.00%
-     Time  (mean ± σ):   4.083 ms ±  1.375 ms  ┊ GC (mean ± σ):  6.73% ± 11.46%
+    BenchmarkTools.Trial: 1105 samples with 1 evaluation.
+     Range (min … max):  4.009 ms … 10.604 ms  ┊ GC (min … max): 0.00% … 39.24%
+     Time  (median):     4.197 ms              ┊ GC (median):    0.00%
+     Time  (mean ± σ):   4.521 ms ±  1.120 ms  ┊ GC (mean ± σ):  4.92% ±  9.81%
 
-      ▇█▄▂                                                   ▁    
-      ████▇▄▇▅▄▁▁▄▄▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▁▅▇██▇▇ █
-      3.59 ms      Histogram: log(frequency) by time     9.62 ms <
+      ▅█▆▅▄▃▂▁                                                    
+      ████████▆▅▁▁▁▁▁▁▁▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▆▅▆▆██▆▇▆▅ █
+      4.01 ms      Histogram: log(frequency) by time     9.11 ms <
 
-     Memory estimate: 2.65 MiB, allocs estimate: 22493.
+     Memory estimate: 2.73 MiB, allocs estimate: 23833.
 
 ## The acsets version
 
@@ -372,11 +372,11 @@ ijklm_query[1:5,:] |> markdown_table
 
 | i   | j   | k   | l   | m   |
 |-----|-----|-----|-----|-----|
-| 24  | 16  | 17  | 5   | 19  |
-| 24  | 16  | 17  | 2   | 19  |
-| 38  | 15  | 11  | 15  | 6   |
-| 26  | 18  | 20  | 8   | 20  |
-| 26  | 18  | 20  | 8   | 16  |
+| 73  | 10  | 16  | 16  | 11  |
+| 97  | 15  | 15  | 14  | 13  |
+| 97  | 15  | 15  | 12  | 1   |
+| 69  | 19  | 3   | 10  | 15  |
+| 69  | 19  | 3   | 20  | 4   |
 
 Now that we know they are equal, we can go ahead and see how fast the
 acsets version is. The fact that the acsets based query is right on the
@@ -399,16 +399,16 @@ via foreign keys).
 end
 ```
 
-    BenchmarkTools.Trial: 1094 samples with 1 evaluation.
-     Range (min … max):  4.002 ms … 10.789 ms  ┊ GC (min … max): 0.00% … 47.69%
-     Time  (median):     4.131 ms              ┊ GC (median):    0.00%
-     Time  (mean ± σ):   4.567 ms ±  1.352 ms  ┊ GC (mean ± σ):  7.01% ± 12.06%
+    BenchmarkTools.Trial: 1024 samples with 1 evaluation.
+     Range (min … max):  4.359 ms … 10.520 ms  ┊ GC (min … max): 0.00% … 38.41%
+     Time  (median):     4.482 ms              ┊ GC (median):    0.00%
+     Time  (mean ± σ):   4.881 ms ±  1.223 ms  ┊ GC (mean ± σ):  5.71% ± 10.57%
 
-      ▇█▄▂▁▃▃                                             ▁       
-      ███████▆▆▄▅▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▇███▇▆▅ ▇
-      4 ms         Histogram: log(frequency) by time     9.53 ms <
+      ▆█▄▂▂▂                                                      
+      ███████▆▄▆▄▅▅▄▄▄▁▄▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▄▇█▆▇█▇▇▆▄ ▇
+      4.36 ms      Histogram: log(frequency) by time     9.34 ms <
 
-     Memory estimate: 3.37 MiB, allocs estimate: 28890.
+     Memory estimate: 3.47 MiB, allocs estimate: 30406.
 
 ### data migrations of acsets
 
@@ -547,9 +547,35 @@ pretty_tables(ijklm_migrate_acset, tables=[:IJKLM], max_num_of_rows=5)
     ┌───────┬────┬────┬────┬────┬────┐
     │ IJKLM │  i │  j │  k │  l │  m │
     ├───────┼────┼────┼────┼────┼────┤
-    │     1 │ 24 │ 16 │ 17 │  5 │ 19 │
-    │     2 │ 24 │ 16 │ 17 │  2 │ 19 │
-    │     3 │ 38 │ 15 │ 11 │ 15 │  6 │
-    │     4 │ 26 │ 18 │ 20 │  8 │ 20 │
-    │     5 │ 26 │ 18 │ 20 │  8 │ 16 │
+    │     1 │ 73 │ 10 │ 16 │ 16 │ 11 │
+    │     2 │ 97 │ 15 │ 15 │ 14 │ 13 │
+    │     3 │ 97 │ 15 │ 15 │ 12 │  1 │
+    │     4 │ 69 │ 19 │  3 │ 10 │ 15 │
+    │     5 │ 69 │ 19 │  3 │ 20 │  4 │
     └───────┴────┴────┴────┴────┴────┘
+
+Once again, let’s benchmark:
+
+``` julia
+@benchmark let
+    ijklm = migrate(IJKLMRelType, ijklm_dat, M)
+    model = JuMP.Model(HiGHS.Optimizer)
+    set_silent(model)
+    @variable(model, x[parts(ijklm,:IJKLM)] >= 0)
+    for i in parts(ijklm,:I)
+        @constraint(model, sum(x[incident(ijklm,i,:i)]) >= 0)
+    end
+    optimize!(model)
+end
+```
+
+    BenchmarkTools.Trial: 514 samples with 1 evaluation.
+     Range (min … max):  8.592 ms … 21.361 ms  ┊ GC (min … max): 0.00% … 22.67%
+     Time  (median):     8.991 ms              ┊ GC (median):    0.00%
+     Time  (mean ± σ):   9.723 ms ±  1.594 ms  ┊ GC (mean ± σ):  6.39% ±  9.62%
+
+      ██▅▅▅▆▃▁▂▁                           ▂▄▃ ▁                  
+      ███████████▇▁▆▄▇█▁▄▅▅▄▁▁▁▇▁▁▁▄▁▄▁▁▄▆▇████████▅▄▁▁▆▁▁▄▄▁▄▁▄ █
+      8.59 ms      Histogram: log(frequency) by time     13.8 ms <
+
+     Memory estimate: 9.34 MiB, allocs estimate: 66729.
