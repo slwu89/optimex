@@ -73,7 +73,7 @@ IntuitiveIJKLM = function(IJK_sparse,JKL_sparse,KLM_sparse)
     optimize!(model)
 end
 
-@benchmark IntuitiveIJKLM(IJK_sparse,JKL_sparse,KLM_sparse)
+# @benchmark IntuitiveIJKLM(IJK_sparse,JKL_sparse,KLM_sparse)
 
 
 # --------------------------------------------------------------------------------
@@ -108,7 +108,7 @@ end
 
 # benchmark it
 IJK_sparse_df,JKL_sparse_df,KLM_sparse_df = sparsify_df(IJK,JKL,KLM)
-@benchmark DataBaseIJKLM(IJK_sparse_df,JKL_sparse_df,KLM_sparse_df) setup=(DataBaseIJKLM(IJK_sparse_df,JKL_sparse_df,KLM_sparse_df))
+# @benchmark DataBaseIJKLM(IJK_sparse_df,JKL_sparse_df,KLM_sparse_df) setup=(DataBaseIJKLM(IJK_sparse_df,JKL_sparse_df,KLM_sparse_df))
 
 # --------------------------------------------------------------------------------
 # acsets
@@ -229,7 +229,7 @@ QueryIJKLM = function(acs, uwd_query)
     optimize!(model)
 end
 
-@benchmark QueryIJKLM(ijklm_acs,ijklm_query) setup=(QueryIJKLM(ijklm_acs,ijklm_query) )
+# @benchmark QueryIJKLM(ijklm_acs,ijklm_query) setup=(QueryIJKLM(ijklm_acs,ijklm_query) )
 
 # --------------------------------------------------------------------------------
 # data migration
@@ -317,7 +317,7 @@ MigrateIJKLM = function(acs,migration)
     optimize!(model)
 end
 
-@benchmark MigrateIJKLM(ijklm_acs, ijklm_migration) setup=(MigrateIJKLM(ijklm_acs, ijklm_migration))
+# @benchmark MigrateIJKLM(ijklm_acs, ijklm_migration) setup=(MigrateIJKLM(ijklm_acs, ijklm_migration))
 
 # --------------------------------------------------------------------------------
 # comparison of results across range of model sizes
@@ -335,15 +335,17 @@ BenchmarkIJKLM = function(in_query,in_migration,n=100,m=20)
     b_dataframes = @benchmark DataBaseIJKLM(IJK_sparse_df,JKL_sparse_df,KLM_sparse_df) setup=(DataBaseIJKLM(IJK_sparse_df,JKL_sparse_df,KLM_sparse_df))
 
     ijklm_acs = make_acset(I,J,K,L,M,IJK,JKL,KLM)
-    b_query = @benchmark QueryIJKLM(ijklm_acs,in_query) setup=(QueryIJKLM(ijklm_acs,in_query))
+    b_query = @benchmark QueryIJKLM(ijklm_acs,$(in_query)) setup=(QueryIJKLM(ijklm_acs,$(in_query)))
 
-    b_migrate = @benchmark MigrateIJKLM(ijklm_acs,in_migration) setup=(MigrateIJKLM(ijklm_acs,in_migration))
+    b_migrate = @benchmark MigrateIJKLM(ijklm_acs,$(in_migration)) setup=(MigrateIJKLM(ijklm_acs,$(in_migration)))
 
     return (i=b_intuit,d=b_dataframes,q=b_query,m=b_migrate)
 end
 
 # benchmark it
 @time ijklm_benchmark_results = [BenchmarkIJKLM(ijklm_query,ijklm_migration,nrange[i],mrange[i]) for i in 1:length(nrange)]
+
+sdfdsfsd=5
 
 # # --------------------------------------------------------------------------------
 # # "rebuild" the subacset from the query result
