@@ -326,7 +326,7 @@ nrange = 10 .^ (1:5)
 mrange = Int.(nrange ./ 5)
 
 # we run everything once before starting benchmarking to avoid including compile times, just care about runtime performance
-BenchmarkIJKLM = function(query,migration,n=100,m=20)
+BenchmarkIJKLM = function(in_query,in_migration,n=100,m=20)
     I,J,K,L,M,IJK,JKL,KLM,IJK_sparse,JKL_sparse,KLM_sparse = SampleIJKLM(n,m)
 
     b_intuit = @benchmark IntuitiveIJKLM(IJK_sparse,JKL_sparse,KLM_sparse) setup=(IntuitiveIJKLM(IJK_sparse,JKL_sparse,KLM_sparse))
@@ -335,9 +335,9 @@ BenchmarkIJKLM = function(query,migration,n=100,m=20)
     b_dataframes = @benchmark DataBaseIJKLM(IJK_sparse_df,JKL_sparse_df,KLM_sparse_df) setup=(DataBaseIJKLM(IJK_sparse_df,JKL_sparse_df,KLM_sparse_df))
 
     ijklm_acs = make_acset(I,J,K,L,M,IJK,JKL,KLM)
-    b_query = @benchmark QueryIJKLM(ijklm_acs,query) setup=(QueryIJKLM(ijklm_acs,query))
+    b_query = @benchmark QueryIJKLM(ijklm_acs,in_query) setup=(QueryIJKLM(ijklm_acs,in_query))
 
-    b_migrate = @benchmark MigrateIJKLM(ijklm_acs,migration) setup=(MigrateIJKLM(ijklm_acs,migration))
+    b_migrate = @benchmark MigrateIJKLM(ijklm_acs,in_migration) setup=(MigrateIJKLM(ijklm_acs,in_migration))
 
     return (i=b_intuit,d=b_dataframes,q=b_query,m=b_migrate)
 end
