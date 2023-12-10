@@ -322,7 +322,7 @@ end
 # --------------------------------------------------------------------------------
 # comparison of results across range of model sizes
 
-nrange = 10 .^ (1:5)
+nrange = 10 .^ (1:4)
 mrange = Int.(nrange ./ 5)
 
 # we run everything once before starting benchmarking to avoid including compile times, just care about runtime performance
