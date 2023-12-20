@@ -1,20 +1,5 @@
 using Catlab
 
-@present GeneralSch(FreeSchema) begin
-    (I,J,C)::Ob
-    i::Hom(C,I)
-    j::Hom(C,J)
-    RealType::AttrType
-    row_min::Attr(I,RealType)
-    row_max::Attr(I,RealType)
-    col_profit::Attr(J,RealType)
-    col_min::Attr(J,RealType)
-    col_optimal::Attr(J,RealType)
-    col_max::Attr(J,RealType)
-end
-
-Catlab.to_graphviz(GeneralSch,graph_attrs=Dict(:dpi=>"72",:size=>"4",:ratio=>"expand"))
-
 @present ProductionSch(FreeSchema) begin
     (M,F,A,Mconv,Fin,Fout,Fact,Ain,Aout)::Ob
     # projections from M_conv
@@ -78,3 +63,26 @@ end
 Catlab.to_graphviz(ProductionSch,graph_attrs=Dict(:dpi=>"60",:size=>"8",:ratio=>"expand"))
 
 # we need a synthetic data generator
+
+
+# schema for general LP model
+@present LPSch(FreeSchema) begin
+    # I: constraints, J: variables, C: subset of IxJ, coefficient nonzeros
+    (I,J,C)::Ob
+    i::Hom(C,I)
+    j::Hom(C,J)
+
+    RealType::AttrType
+
+    # min/max values for each constraint
+    row_min::Attr(I,RealType)
+    row_max::Attr(I,RealType)
+
+    # values for decision variables
+    col_profit::Attr(J,RealType)
+    col_min::Attr(J,RealType)
+    col_optimal::Attr(J,RealType)
+    col_max::Attr(J,RealType)
+end
+
+Catlab.to_graphviz(LPSch,graph_attrs=Dict(:dpi=>"72",:size=>"4",:ratio=>"expand"))

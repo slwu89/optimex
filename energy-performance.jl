@@ -208,15 +208,15 @@ MacroTools.prettify(
 )
 
 # acs
-dotterel = let model = model
-        container(((v, Tᵥ)->begin
+# 0.106239 seconds (520.67 k allocations: 25.347 MiB, 81.05% compilation time)
+@time JuMP.Containers.container(((v, Tᵥ)->begin
                     locust = let
-                            manatee = MutableArithmetics.Zero()
+                            manatee = JuMP.MutableArithmetics.Zero()
                             for e = incident(NetData, v, :tgt)
                                 for Tₑ = NetData[e, :te]
                                     squirrel = Tₑ ∩ Tᵥ
                                     sanddollar = length(squirrel)
-                                    manatee = operate!!(add_mul, manatee, sanddollar, flow[e, Tₑ])
+                                    manatee = JuMP.MutableArithmetics.operate!!(JuMP.MutableArithmetics.add_mul, manatee, sanddollar, flow[e, Tₑ])
                                 end
                             end
                             manatee
@@ -224,18 +224,17 @@ dotterel = let model = model
                     mouse = flatten!(locust)
                     JuMP._replace_zero(model, mouse)
                 end), (JuMP.Containers).nested((()->V), ((v,)->NetData[v, :tv])), JuMP.Containers.AutoContainerType, Any[:v, :Tᵥ])
-end
 
 # dicts
-dotterel = let model = model
-        container(((v, Tᵥ)->begin
+# 0.127419 seconds (402.73 k allocations: 23.393 MiB, 92.80% compilation time)
+@time JuMP.Containers.container(((v, Tᵥ)->begin
                     locust = let
-                            manatee = MutableArithmetics.Zero()
-                            for src = [src for (src, dst) = E_list if (NonlinearOperator(==, :==))(dst, v)]
+                            manatee = JuMP.MutableArithmetics.Zero()
+                            for src = [src for (src, dst) = E_list if (JuMP.NonlinearOperator(==, :(==)))(dst, v)]
                                 for Tₑ = TE[(src, v)]
                                     squirrel = Tₑ ∩ Tᵥ
                                     sanddollar = length(squirrel)
-                                    manatee = operate!!(add_mul, manatee, sanddollar, flow[(src, v), Tₑ])
+                                    manatee = JuMP.MutableArithmetics.operate!!(JuMP.MutableArithmetics.add_mul, manatee, sanddollar, flow[(src, v), Tₑ])
                                 end
                             end
                             manatee
@@ -243,7 +242,9 @@ dotterel = let model = model
                     mouse = flatten!(locust)
                     JuMP._replace_zero(model, mouse)
                 end), (JuMP.Containers).nested((()->V), ((v,)->TV[v])), JuMP.Containers.AutoContainerType, Any[:v, :Tᵥ])
-end
+
+
+
 
 # benchmark incident versus this lookup method
 test1(acs, vertices) = begin
