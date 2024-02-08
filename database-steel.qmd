@@ -76,6 +76,7 @@ The paper describes how to use the relational interpretation to build a database
     col_min::Attr(J,RealType)
     col_optimal::Attr(J,RealType)
     col_max::Attr(J,RealType)
+    coeff_value::Attr(C,RealType)
 end
 
 Catlab.to_graphviz(GeneralSch,graph_attrs=Dict(:dpi=>"72",:size=>"4",:ratio=>"expand"))
@@ -163,6 +164,8 @@ We kept the names of the attribute columns the same as the paper, but changed th
 
     # data attributes
     RealType::AttrType
+    NameType::AttrType
+    mat_name::Attr(M,NameType)
     buy_min::Attr(M,RealType)
     buy_opt::Attr(M,RealType)
     buy_max::Attr(M,RealType)
@@ -172,12 +175,9 @@ We kept the names of the attribute columns the same as the paper, but changed th
     sell_max::Attr(M,RealType)
     sell_cost::Attr(M,RealType)
 
+    fac_name::Attr(F,NameType)
     cap_min::Attr(F,RealType)
     cap_max::Attr(F,RealType)
-
-    conv_yield::Attr(Mconv,RealType)
-    conv_cost::Attr(Mconv,RealType)
-    conv_opt::Attr(Mconv,RealType)
 
     in_min::Attr(Fin,RealType)
     in_opt::Attr(Fin,RealType)
@@ -186,6 +186,10 @@ We kept the names of the attribute columns the same as the paper, but changed th
     out_min::Attr(Fout,RealType)
     out_opt::Attr(Fout,RealType)
     out_max::Attr(Fout,RealType)
+
+    conv_yield::Attr(Mconv,RealType)
+    conv_cost::Attr(Mconv,RealType)
+    conv_opt::Attr(Mconv,RealType)
 
     act_min::Attr(Fact,RealType)
     act_opt::Attr(Fact,RealType)
@@ -196,6 +200,8 @@ We kept the names of the attribute columns the same as the paper, but changed th
     act_in_rate::Attr(Ain,RealType)
 
     act_out_rate::Attr(Aout,RealType)
+
+    act_name::Attr(A,NameType)
 end
 
 Catlab.to_graphviz(ProductionSch,graph_attrs=Dict(:dpi=>"60",:size=>"8",:ratio=>"expand"))
