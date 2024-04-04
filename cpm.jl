@@ -6,10 +6,12 @@ using Catlab, DataFrames
   Duration::AttrType
   duration::Attr(V,Duration)
   es::Attr(V,Duration) # earliest possible starting times
-  ef::Attr(V,duration) # earliest possible finishing times
+  ef::Attr(V,Duration) # earliest possible finishing times
   ls::Attr(V,Duration) # latest possible starting times
   lf::Attr(V,Duration) # latest possible finishing times
 end
+
+to_graphviz(SchActivityOnNodeGraph)
 
 @abstract_acset_type AbstractActivityOnNodeGraph <: AbstractGraph
 
@@ -45,3 +47,12 @@ add_edge!(projnet, only(incident(projnet, :start, :label)), only(incident(projne
 add_edge!(projnet, only(incident(projnet, last(proj_df).Activity, :label)), only(incident(projnet, :end, :label)))
 
 to_graphviz(projnet, node_labels=:label)
+
+# starting node ES = EF = 0
+node = only(incident(projnet, :start, :label))
+projnet[node, :es] = 0
+projnet[node, :ef] = 0
+
+remaining = setdiff(parts(projnet, :V), node)
+
+collect(outneighbors(projnet, node))
