@@ -2,7 +2,11 @@ using Catlab, DataFrames
 using JuMP, HiGHS
 const VarType = Union{JuMP.VariableRef,Float64}
 
-# the data types
+"""
+    The schema for a basic project that will be subject to
+critical path analysis. It follows the "AoN" (activity on node)
+method.
+"""
 @present SchProjGraph <: SchLabeledGraph begin
   Duration::AttrType
   duration::Attr(V,Duration)
@@ -13,10 +17,14 @@ const VarType = Union{JuMP.VariableRef,Float64}
   float::Attr(V,Duration) # "float" time of task
 end
 
-to_graphviz(SchProjGraph)
-
+"""
+    An abstract acset type that inherits from `AbstractGraph`
+"""
 @abstract_acset_type AbstractProjGraph <: AbstractGraph
 
+"""
+    A concrete acset type that inherits from `AbstractProjGraph`
+"""
 @acset_type ProjGraph(SchProjGraph, index=[:src,:tgt]) <: AbstractProjGraph
 
 """
@@ -42,8 +50,6 @@ function make_ProjGraph(input::DataFrame)
 
     return g
 end
-
-# da codez
 
 """
     Perform a forward pass of the critical path sweep. This identifies
@@ -120,57 +126,11 @@ function find_critical_path(g::T) where {T<:AbstractProjGraph}
     return findall(seen), ce
 end
 
-# ex: table 7.1
-proj_df = DataFrame(
-    Activity = [:start,:A,:B,:C,:D,:E,:F,:G,:H,:I,:J,:end],
-    Predecessor = [
-        [], [:start], [:A], [:A,:B], [:B], [:B,:C], [:C,:D,:E],
-        [:D], [:F,:G], [:F,:G], [:I], [:H,:J]
-    ],
-    Duration = [0,5,3,7,4,6,4,2,9,6,2,0]
-)
 
-projnet = make_ProjGraph(proj_df)
-to_graphviz(projnet, node_labels=:label)
-
-toposort = forward_pass!(projnet)
-backward_pass!(projnet, toposort)
-cV, cE = find_critical_path(projnet)
-
-cg = Subobject(projnet, V=cV, E=cE)
-to_graphviz(cg, node_labels=:label)
-
-# ex: fig 7.4
-proj_df = DataFrame(
-    Activity = [:start,:A,:B,:C,:D,:end],
-    Predecessor = [
-        [], [:start], [:start], [:A,:B], [:A,:B], [:C,:D]
-    ],
-    Duration = [0,5,4,7,8,0]
-)
-
-projnet = make_ProjGraph(proj_df)
-to_graphviz(projnet, node_labels=:label)
-
-toposort = forward_pass!(projnet)
-backward_pass!(projnet, toposort)
-cV, cE = find_critical_path(projnet)
-
-cg = Subobject(projnet, V=cV, E=cE)
-to_graphviz(cg, node_labels=:label)
-
-# "reduce" time for D to 7
-proj_df[proj_df.Activity .== :D, :Duration] .= 7
-projnet = make_ProjGraph(proj_df)
-
-toposort = forward_pass!(projnet)
-backward_pass!(projnet, toposort)
-cV, cE = find_critical_path(projnet)
-
-cg = Subobject(projnet, V=cV, E=cE)
-to_graphviz(cg, node_labels=:label)
-
-# CPM with acceleration as a LP problem
+"""
+    Schema for a project graph that will be optimized for project
+acceleration.
+"""
 @present SchAccelProjGraph <: SchLabeledGraph begin
     VarType::AttrType
     TimeType::AttrType
@@ -182,10 +142,14 @@ to_graphviz(cg, node_labels=:label)
     Δc::Attr(V,CostType) # cost to reduce duration by one unit
 end
 
-to_graphviz(SchAccelProjGraph)
-
+"""
+    Abstract type for project graph under acceleration, inherits from `AbstractGraph`
+"""
 @abstract_acset_type AbstractAccelProjGraph <: AbstractGraph
 
+"""
+    Concrete acset type for project graph under acceleration, inherits from `AbstractAccelProjGraph`
+"""
 @acset_type AccelProjGraph(SchAccelProjGraph, index=[:src,:tgt]) <: AbstractAccelProjGraph
 
 """
@@ -214,69 +178,63 @@ function make_AccelProjGraph(input::DataFrame)
     return g
 end
 
-# ex: Fig III.12
-proj_df = DataFrame(
-    Activity = [:start,:A,:B,:C,:D,:E,:end],
-    Predecessor = [
-        [], [:start], [:start], [:A], [:A], [:B,:C], [:D,:E]
-    ],
-    Max = [0,3,5,4,4,5,0],
-    Min = [0,3,2,1,1,2,0],
-    Cost = [0,0,200,200,100,600,0]
-)
+"""
+    Formulate and solve the project acceleration problem with a prespecified time `Tbar`
+according to the method in:
 
-projnet = make_AccelProjGraph(proj_df)
-to_graphviz(projnet, node_labels=:label)
+  * Eiselt, H. A., & Sandblom, C. L. (2013). Decision analysis, location models, and scheduling problems. 
 
-T = 11 # generalize somehow
-
-# make the LP model
-
-jumpmod = JuMP.Model(HiGHS.Optimizer)
-
-# the decision vars
-@variable(
-    jumpmod, 
-    projnet[v,:tmin] ≤ x_j[v ∈ vertices(projnet)] ≤ projnet[v,:tmax] 
-)
-
-projnet[:,:x] = jumpmod[:x_j]
-
-@variable(
-    jumpmod, 
-    0 ≤ y_j[v ∈ vertices(projnet)]
-)
-
-projnet[:,:y] = jumpmod[:y_j]
-
-# final time constraint
-nt = only(incident(projnet, :end, :label))
-@constraint(
-    jumpmod,
-    final_time,
-    projnet[nt,:y] ≤ T
-)
-
-# precedence constraints
-for j in vertices(projnet)
-    pred = collect(inneighbors(projnet,j))
-    if length(j) > 0
-        @constraint(
-            jumpmod,
-            [i ∈ pred],
-            projnet[j,:y] ≥ projnet[i,:y] + projnet[i,:x]
-        )
+Returns a `JuMP.Model` object, and updates the input `g` with the optimized decision variables.
+"""
+function optimize_AccelProjGraph!(g::T, Tbar) where {T<:AbstractAccelProjGraph}    
+    jumpmod = JuMP.Model(HiGHS.Optimizer)
+    
+    # the decision vars
+    @variable(
+        jumpmod, 
+        g[v,:tmin] ≤ x_j[v ∈ vertices(g)] ≤ g[v,:tmax] 
+    )
+    
+    g[:,:x] = jumpmod[:x_j]
+    
+    @variable(
+        jumpmod, 
+        0 ≤ y_j[v ∈ vertices(g)]
+    )
+    
+    g[:,:y] = jumpmod[:y_j]
+    
+    # final time constraint
+    nt = only(incident(g, :end, :label))
+    @constraint(
+        jumpmod,
+        final_time,
+        g[nt,:y] ≤ Tbar
+    )
+    
+    # precedence constraints
+    for j in vertices(g)
+        pred = collect(inneighbors(g,j))
+        if length(j) > 0
+            @constraint(
+                jumpmod,
+                [i ∈ pred],
+                g[j,:y] ≥ g[i,:y] + g[i,:x]
+            )
+        end
     end
+    
+    # minimize costs
+    @objective(
+        jumpmod,
+        Max,
+        sum(g[v,:Δc] * g[v,:x] for v in vertices(g))
+    )
+    
+    optimize!(jumpmod)
+    
+    g[:,:x] = value.(g[:,:x])
+    g[:,:y] = value.(g[:,:y])
+
+    return jumpmod
 end
-
-# minimize costs
-@objective(
-    jumpmod,
-    Max,
-    sum(projnet[v,:Δc] * projnet[v,:x] for v in vertices(projnet))
-)
-
-optimize!(jumpmod)
-
-projnet[:,:x] = value.(projnet[:,:x])
-projnet[:,:y] = value.(projnet[:,:y])
