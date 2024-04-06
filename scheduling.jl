@@ -1,9 +1,10 @@
 using Catlab, DataFrames
 using JuMP, HiGHS
 const VarType = Union{JuMP.VariableRef,Float64}
+const VectorVarType = Union{Vector{JuMP.VariableRef},Vector{Float64}}
 
 """
-    The schema for a basic project that will be subject to
+The schema for a basic project that will be subject to
 critical path analysis. It follows the "AoN" (activity on node)
 method.
 """
@@ -18,17 +19,17 @@ method.
 end
 
 """
-    An abstract acset type that inherits from `AbstractGraph`
+An abstract acset type that inherits from `AbstractGraph`
 """
 @abstract_acset_type AbstractProjGraph <: AbstractGraph
 
 """
-    A concrete acset type that inherits from `AbstractProjGraph`
+A concrete acset type that inherits from `AbstractProjGraph`
 """
 @acset_type ProjGraph(SchProjGraph, index=[:src,:tgt]) <: AbstractProjGraph
 
 """
-    Make a `ProjGraph` acset from a `DataFrame` with columns for
+Make a `ProjGraph` acset from a `DataFrame` with columns for
 `Activity`, `Predecessor`, and `Duration`.
 """
 function make_ProjGraph(input::DataFrame)
@@ -52,7 +53,7 @@ function make_ProjGraph(input::DataFrame)
 end
 
 """
-    Perform a forward pass of the critical path sweep. This identifies
+Perform a forward pass of the critical path sweep. This identifies
 the earliest starting times `es` and finishing times `ef` for each node.
 This assumes that the node with part id `1` is the start, and that the
 node with highest part id is the end, and the graph is a DAG. Returns
@@ -74,7 +75,7 @@ function forward_pass!(g::T) where {T<:AbstractProjGraph}
 end
 
 """
-    Perform a backward pass of the critical path sweep. This identifies
+Perform a backward pass of the critical path sweep. This identifies
 the latest starting times `ls` and finishing times `lf` for each node.
 It also computes the `float`, the maximum acceptable delay for each node.
 This assumes that the graph is a DAG.
@@ -96,7 +97,7 @@ function backward_pass!(g::T, toposort) where {T<:AbstractProjGraph}
 end
 
 """
-    Find a critical path, assumes that the forward and backward passes have been
+Find a critical path, assumes that the forward and backward passes have been
 completed.
 """
 function find_critical_path(g::T) where {T<:AbstractProjGraph}
@@ -128,7 +129,7 @@ end
 
 
 """
-    Schema for a project graph that will be optimized for project
+Schema for a project graph that will be optimized for project
 acceleration.
 """
 @present SchAccelProjGraph <: SchLabeledGraph begin
@@ -143,17 +144,17 @@ acceleration.
 end
 
 """
-    Abstract type for project graph under acceleration, inherits from `AbstractGraph`
+Abstract type for project graph under acceleration, inherits from `AbstractGraph`
 """
 @abstract_acset_type AbstractAccelProjGraph <: AbstractGraph
 
 """
-    Concrete acset type for project graph under acceleration, inherits from `AbstractAccelProjGraph`
+Concrete acset type for project graph under acceleration, inherits from `AbstractAccelProjGraph`
 """
 @acset_type AccelProjGraph(SchAccelProjGraph, index=[:src,:tgt]) <: AbstractAccelProjGraph
 
 """
-    Make a `AccelProjGraph` acset from a `DataFrame` with columns for
+Make a `AccelProjGraph` acset from a `DataFrame` with columns for
 `Activity`, `Predecessor`, `Max`, `Min`, and `Cost`.
 """
 function make_AccelProjGraph(input::DataFrame)
@@ -179,10 +180,8 @@ function make_AccelProjGraph(input::DataFrame)
 end
 
 """
-    Formulate and solve the project acceleration problem with a prespecified time `Tbar`
-according to the method in:
-
-  * Eiselt, H. A., & Sandblom, C. L. (2013). Decision analysis, location models, and scheduling problems. 
+Formulate and solve the project acceleration problem with a prespecified time `Tbar`
+according to the method in Eiselt, H. A., & Sandblom, C. L. (2013). Decision analysis, location models, and scheduling problems. 
 
 Returns a `JuMP.Model` object, and updates the input `g` with the optimized decision variables.
 """
@@ -238,3 +237,27 @@ function optimize_AccelProjGraph!(g::T, Tbar) where {T<:AbstractAccelProjGraph}
 
     return jumpmod
 end
+
+
+
+"""
+A schema for project scheduling with resource usage. It
+derives from `SchProjGraph`. It follows the description given on pp. 324
+of Eiselt, H. A., & Sandblom, C. L. (2013). Decision analysis, location models, and scheduling problems.
+"""
+@present SchProjGraphRes <: SchProjGraph begin
+  Resource::AttrType
+  resource::Attr(V,Resource)
+  VectorVarType::AttrType
+  x::Attr(V,VectorVarType)
+end
+
+"""
+An abstract acset type that inherits from `AbstractProjGraph`
+"""
+@abstract_acset_type AbstractProjGraphRes <: AbstractProjGraph
+
+"""
+A concrete acset type that inherits from `AbstractProjGraphRes`
+"""
+@acset_type ProjGraphRes(SchProjGraphRes, index=[:src,:tgt]) <: AbstractProjGraphRes

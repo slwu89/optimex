@@ -3,6 +3,9 @@ using JuMP, HiGHS
 
 include("scheduling.jl")
 
+# --------------------------------------------------------------------------------
+# basic CPM examples
+
 # look at the schema for projects
 to_graphviz(SchProjGraph)
 
@@ -56,7 +59,10 @@ cV, cE = find_critical_path(projnet)
 cg = Subobject(projnet, V=cV, E=cE)
 to_graphviz(cg, node_labels=:label)
 
+# --------------------------------------------------------------------------------
 # CPM with acceleration as a LP problem
+
+# view the schema
 to_graphviz(SchAccelProjGraph)
 
 # ex: Fig III.12 from Eiselt, H. A., & Sandblom, C. L. (2013). Decision analysis, location models, and scheduling problems.
@@ -87,3 +93,21 @@ cV, cE = find_critical_path(projnet_cpm)
 
 cg = Subobject(projnet_cpm, V=cV, E=cE)
 to_graphviz(cg, node_labels=:label)
+
+# --------------------------------------------------------------------------------
+# resource constrained scheduling problems
+
+proj_df = DataFrame(
+    Activity = [:start,:A,:B,:C,:D,:E,:F,:end],
+    Predecessor = [
+        [], [:start], [:start], [:start], [:A,:B], [:C], [:E], [:D,:F]
+    ],
+    Duration = [0,4,1,2,1,2,2,0]
+)
+
+projnet = make_ProjGraph(proj_df)
+to_graphviz(projnet, node_labels=:label)
+
+# optimization requires we do the forward and backward passes
+toposort = forward_pass!(projnet)
+backward_pass!(projnet, toposort)
