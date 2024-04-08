@@ -22,11 +22,14 @@ proj_df = DataFrame(
 projnet = make_ProjGraph(proj_df)
 to_graphviz(projnet, node_labels=:label)
 
-toposort = forward_pass!(projnet)
-backward_pass!(projnet, toposort)
-cV, cE = find_critical_path(projnet)
+projnet_cpm = ProjGraphCPM{Symbol,Int}()
+copy_parts!(projnet_cpm, projnet)
 
-cg = Subobject(projnet, V=cV, E=cE)
+toposort = forward_pass!(projnet_cpm)
+backward_pass!(projnet_cpm, toposort)
+cV, cE = find_critical_path(projnet_cpm)
+
+cg = Subobject(projnet_cpm, V=cV, E=cE)
 to_graphviz(cg, node_labels=:label)
 
 # ex: fig 7.4 from Eiselt, H. A., & Sandblom, C. L. (2022). Operations research: A model-based approach.
@@ -41,22 +44,28 @@ proj_df = DataFrame(
 projnet = make_ProjGraph(proj_df)
 to_graphviz(projnet, node_labels=:label)
 
-toposort = forward_pass!(projnet)
-backward_pass!(projnet, toposort)
-cV, cE = find_critical_path(projnet)
+projnet_cpm = ProjGraphCPM{Symbol,Int}()
+copy_parts!(projnet_cpm, projnet)
 
-cg = Subobject(projnet, V=cV, E=cE)
+toposort = forward_pass!(projnet_cpm)
+backward_pass!(projnet_cpm, toposort)
+cV, cE = find_critical_path(projnet_cpm)
+
+cg = Subobject(projnet_cpm, V=cV, E=cE)
 to_graphviz(cg, node_labels=:label)
 
 # "reduce" time for D to 7
 proj_df[proj_df.Activity .== :D, :Duration] .= 7
 projnet = make_ProjGraph(proj_df)
 
-toposort = forward_pass!(projnet)
-backward_pass!(projnet, toposort)
-cV, cE = find_critical_path(projnet)
+projnet_cpm = ProjGraphCPM{Symbol,Int}()
+copy_parts!(projnet_cpm, projnet)
 
-cg = Subobject(projnet, V=cV, E=cE)
+toposort = forward_pass!(projnet_cpm)
+backward_pass!(projnet_cpm, toposort)
+cV, cE = find_critical_path(projnet_cpm)
+
+cg = Subobject(projnet_cpm, V=cV, E=cE)
 to_graphviz(cg, node_labels=:label)
 
 # --------------------------------------------------------------------------------
@@ -82,7 +91,7 @@ to_graphviz(projnet, node_labels=:label)
 proj_jump = optimize_AccelProjGraph!(projnet, 10)
 
 # migrate the AccelProjGraph to ProjGraph to do CPM
-projnet_cpm = ProjGraph{Symbol,Int}()
+projnet_cpm = ProjGraphCPM{Symbol,Int}()
 copy_parts!(projnet_cpm, projnet)
 
 projnet_cpm[:,:duration] = projnet[:,:x]
@@ -95,19 +104,92 @@ cg = Subobject(projnet_cpm, V=cV, E=cE)
 to_graphviz(cg, node_labels=:label)
 
 # --------------------------------------------------------------------------------
-# resource constrained scheduling problems
+# basic CPM/scheduling as LP
 
+# ex: sec 4.3 from Ulusoy, G., Hazır, Ö., Ulusoy, G., & Hazır, Ö. (2021). Introduction to Project Modeling and Planning 
 proj_df = DataFrame(
-    Activity = [:start,:A,:B,:C,:D,:E,:F,:end],
+    Activity = [:start,:A,:B,:C,:D,:E,:F,:G,:end],
     Predecessor = [
-        [], [:start], [:start], [:start], [:A,:B], [:C], [:E], [:D,:F]
+        [], [:start], [:start], [:start], [:A], [:C], [:C], [:D,:B,:E], [:F,:G]
     ],
-    Duration = [0,4,1,2,1,2,2,0]
+    Duration = [0,5,6,4,5,3,6,7,0]
 )
 
 projnet = make_ProjGraph(proj_df)
 to_graphviz(projnet, node_labels=:label)
 
-# optimization requires we do the forward and backward passes
-toposort = forward_pass!(projnet)
-backward_pass!(projnet, toposort)
+projnet_lp = ProjGraphLP{Symbol,Int,VarType}()
+copy_parts!(projnet_lp, projnet)
+
+jumpmod = JuMP.Model(HiGHS.Optimizer)
+
+# dv: when does each task start?
+@variable(
+    jumpmod,
+    0 ≤ t[v in vertices(projnet_lp)]
+)
+
+projnet_lp[:,:t] = jumpmod[:t]
+
+# wlog, start project begins at 0
+@constraint(
+    jumpmod,
+    projnet_lp[1,:t] == 0
+)
+
+@constraint(
+    jumpmod,
+    [e ∈ edges(projnet_lp)],
+    projnet_lp[e, (:tgt, :t)] - projnet_lp[e, (:src, :t)] ≥ projnet_lp[e, (:src, :duration)]
+)
+
+# minimize overall time
+@objective(
+    jumpmod,
+    Min,
+    projnet_lp[nv(projnet_lp),:t]
+)
+
+optimize!(jumpmod)
+    
+projnet_lp[:,:t] = value.(projnet_lp[:,:t])
+
+
+x
+
+# # --------------------------------------------------------------------------------
+# # resource constrained scheduling problems
+
+# proj_df = DataFrame(
+#     Activity = [:start,:A,:B,:C,:D,:E,:F,:end],
+#     Predecessor = [
+#         [], [:start], [:start], [:start], [:A,:B], [:C], [:E], [:D,:F]
+#     ],
+#     Duration = [0,4,1,2,1,2,2,0]
+# )
+
+# projnet = make_ProjGraph(proj_df)
+# to_graphviz(projnet, node_labels=:label)
+
+# # optimization requires we do the forward and backward passes
+# toposort = forward_pass!(projnet)
+# backward_pass!(projnet, toposort)
+
+# # figure out the optimization problem
+# projnet_optim = ProjGraphRes{Symbol,Int,Int,VectorVarType}()
+# copy_parts!(projnet_optim, projnet)
+# projnet_optim[:,:resource] = [0,1,2,1,2,1,3,0]
+
+# jumpmod = JuMP.Model(HiGHS.Optimizer)
+
+# # the time it would take if everything was scheduled sequentially
+# up_bound = sum(projnet_optim[:,:duration])
+
+# # the decision vars
+# @variable(
+#     jumpmod, 
+#     g[v,:tmin] ≤ x_j[v ∈ vertices(g)] ≤ g[v,:tmax] 
+# )
+
+# # this is probably good to read: https://hal.science/hal-00361395/document
+# # the local solver ex https://www.hexaly.com/docs/last/exampletour/resource-constrained-project-scheduling-problem-rcpsp.html
