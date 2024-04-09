@@ -158,7 +158,7 @@ to_graphviz(cg, node_labels=:label)
 
 jumpmod = JuMP.Model(HiGHS.Optimizer)
 
-# dv: when does each task finish?
+# dv: when does each task finish + the constraint for them to all actually finish
 for v in vertices(projnet_npv)
     x = @variable(
         jumpmod,
@@ -171,6 +171,25 @@ for v in vertices(projnet_npv)
     )
     projnet_npv[v,:x] = x
 end
+
+# in the book, this constraint is indexed over nodes; it's much nicer to index it over edges
+@constraint(
+    jumpmod,
+    [e ∈ edges(jumpmod)],
+    g[e, (:tgt, :t)] - g[e, (:src, :t)] ≥ g[e, (:src, :duration)]
+)
+
+sum((t - projnet_npv[5,:duration]) * projnet_npv[5,:x][t] for t in first.(getfield.(keys(projnet_npv[5,:x]),:I)))
+
+jumpmod = JuMP.Model(HiGHS.Optimizer)
+x = @variable(
+    jumpmod,
+    [5:8]
+)
+first.(getfield.(keys(x),:I))
+
+#does the trick
+axes(x,1)
 
 x
 
