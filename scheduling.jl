@@ -3,6 +3,11 @@ using JuMP, HiGHS
 const VarType = Union{JuMP.VariableRef,Float64}
 const VectorVarType = Union{Vector{JuMP.VariableRef},Vector{Float64}}
 
+# notes:
+# 1. a somewhat more principled way to handle the start/end nodes in AoN
+#    network would be to have 2 dummy objects (S,E) with 1 element in their sets
+#    which point to the nodes that are supposed to be starting and ending.
+
 # --------------------------------------------------------------------------------
 # basic AoN schema
 
@@ -76,6 +81,52 @@ A concrete acset type that inherits from `AbstractProjGraphLP`
 """
 @acset_type ProjGraphLP(SchProjGraphLP, index=[:src,:tgt]) <: AbstractProjGraphLP
 
+
+"""
+Formulate and solve the basic scheduling problem
+according to the method in 4.3 from Ulusoy, G., & Hazır, Ö. (2021). Introduction to Project Modeling and Planning .
+
+Returns a `JuMP.Model` object, and updates the input `g` with the optimized decision variables.
+"""
+function optimize_ProjGraphLP(g::T) where {T<:AbstractProjGraphLP}    
+    jumpmod = JuMP.Model(HiGHS.Optimizer)
+
+    # dv: when does each task start?
+    @variable(
+        jumpmod,
+        0 ≤ t[v in vertices(g)]
+    )
+    
+    g[:,:t] = jumpmod[:t]
+    
+    # wlog, start project begins at 0
+    @constraint(
+        jumpmod,
+        g[1,:t] == 0
+    )
+    
+    # projects can only begin after predecessors finishe
+    @constraint(
+        jumpmod,
+        [e ∈ edges(g)],
+        g[e, (:tgt, :t)] - g[e, (:src, :t)] ≥ g[e, (:src, :duration)]
+    )
+    
+    # minimize overall time
+    @objective(
+        jumpmod,
+        Min,
+        g[nv(g),:t]
+    )
+    
+    optimize!(jumpmod)
+        
+    g[:,:t] = value.(g[:,:t])    
+
+    return jumpmod
+end
+
+
 # --------------------------------------------------------------------------------
 # AoN for CPM
 
@@ -107,11 +158,14 @@ the earliest starting times `es` and finishing times `ef` for each node.
 This assumes that the node with part id `1` is the start, and that the
 node with highest part id is the end, and the graph is a DAG. Returns
 the topological sort of the nodes.
+
+See Eiselt, H. A., & Sandblom, C. L. (2013). Decision analysis, location models, and scheduling problems.
 """
 function forward_pass!(g::T) where {T<:AbstractProjGraphCPM}
     g[1, :es] = 0
     g[1, :ef] = 0
 
+    # also serves as a check `g` is actually a DAG
     toposort = topological_sort(g)
 
     for v in toposort[2:end]
@@ -128,6 +182,8 @@ Perform a backward pass of the critical path sweep. This identifies
 the latest starting times `ls` and finishing times `lf` for each node.
 It also computes the `float`, the maximum acceptable delay for each node.
 This assumes that the graph is a DAG.
+
+See Eiselt, H. A., & Sandblom, C. L. (2013). Decision analysis, location models, and scheduling problems.
 """
 function backward_pass!(g::T, toposort) where {T<:AbstractProjGraphCPM}
     reverse!(toposort)
@@ -148,6 +204,8 @@ end
 """
 Find a critical path, assumes that the forward and backward passes have been
 completed.
+
+See Eiselt, H. A., & Sandblom, C. L. (2013). Decision analysis, location models, and scheduling problems.
 """
 function find_critical_path(g::T) where {T<:AbstractProjGraphCPM}
     # set of critical activities 
@@ -177,6 +235,89 @@ function find_critical_path(g::T) where {T<:AbstractProjGraphCPM}
 end
 
 # --------------------------------------------------------------------------------
+# AoN + maximizing NPV with no resource constraints
+
+"""
+The schema for a project that will be subject to net present value optimization,
+it inherits from `SchProjGraphCPM` because the optimization assumes that values
+from the critical path method have been calculated.
+"""
+@present SchProjGraphNPV <: SchProjGraphCPM begin
+    VarType::AttrType
+    CostType::AttrType
+    x::Attr(V,VarType) # decision var: finish time of task
+    C::Attr(V,CostType) # cash flow of task
+end
+
+"""
+An abstract acset type that inherits from `AbstractProjGraphCPM`
+"""
+@abstract_acset_type AbstractProjGraphNPV <: AbstractProjGraphCPM
+
+"""
+A concrete acset type that inherits from `AbstractProjGraphNPV`
+"""
+@acset_type ProjGraphNPV(SchProjGraphNPV, index=[:src,:tgt]) <: AbstractProjGraphNPV
+
+"""
+Formulate and solve the maximization of NPV under no resource constraints
+according to the model in 4.4.1 from Ulusoy, G., & Hazır, Ö. (2021). Introduction to Project Modeling and Planning.
+
+The argument `D` is a due date, which cannot be less that the earliest project duration time calculated
+by CPM.
+
+Returns a `JuMP.Model` object, and updates the input `g` with the optimized decision variables.
+"""
+function optimize_ProjGraphLP(g::T, D::Int) where {T<:AbstractProjGraphNPV}
+    @assert D ≥ g[nv(g), :ef]
+
+    jumpmod = JuMP.Model(HiGHS.Optimizer)
+
+    # dv: when does each task finish?
+    @variable(
+        jumpmod,
+        x[v in vertices(g), t in 1:D],
+        Bin
+    )
+    
+    for v in vertices(g)
+        g[v,:x] = jumpmod[:x][v,:]
+    end
+
+    # projects can only finish in the window from CPM
+    for v in vertices(g)
+        
+    end
+    
+    # # wlog, start project begins at 0
+    # @constraint(
+    #     jumpmod,
+    #     g[1,:t] == 0
+    # )
+    
+    # # projects can only begin after predecessors finishe
+    # @constraint(
+    #     jumpmod,
+    #     [e ∈ edges(g)],
+    #     g[e, (:tgt, :t)] - g[e, (:src, :t)] ≥ g[e, (:src, :duration)]
+    # )
+    
+    # # minimize overall time
+    # @objective(
+    #     jumpmod,
+    #     Min,
+    #     g[nv(g),:t]
+    # )
+    
+    # optimize!(jumpmod)
+        
+    # g[:,:t] = value.(g[:,:t])    
+
+    return jumpmod
+end
+
+
+# --------------------------------------------------------------------------------
 # AoN + acceleration (crashing)
 # NOTE: this doesn't fit into the hierarchy right now, unfortunately, but it should?
 # NOTE: generalize the obj of the LP to 2-objs: min cost and min time (right now time is hard constraint)
@@ -184,6 +325,8 @@ end
 """
 Schema for a project graph that will be optimized for project
 acceleration.
+
+Uses description in section 1.3 Project Acceleration in Eiselt, H. A., & Sandblom, C. L. (2013). Decision analysis, location models, and scheduling problems.
 """
 @present SchAccelProjGraph <: SchLabeledGraph begin
     VarType::AttrType

@@ -121,39 +121,56 @@ to_graphviz(projnet, node_labels=:label)
 projnet_lp = ProjGraphLP{Symbol,Int,VarType}()
 copy_parts!(projnet_lp, projnet)
 
+proj_jump = optimize_ProjGraphLP(projnet_lp)
+
+# solutions from book
+@assert projnet_lp[1,:t] == 0
+@assert projnet_lp[nv(projnet_lp),:t] == 17
+
+
+# --------------------------------------------------------------------------------
+# CPM/optimization of NPV
+
+proj_df = DataFrame(
+    Activity = [:start,:A,:B,:C,:D,:E,:F,:G,:H,:I,:J,:K,:L,:end],
+    Predecessor = [
+        [], [:start], [:start], [:start], [:B], [:B], [:B], [:C,:F], [:A], [:D], [:F], [:I,:E,:J], [:K,:G], [:H,:L]
+    ],
+    Duration = [0,6,5,3,1,6,2,1,4,3,2,3,5,0]
+)
+
+projnet = make_ProjGraph(proj_df)
+to_graphviz(projnet, node_labels=:label)
+
+projnet_npv = ProjGraphNPV{Symbol,Int,Union{Containers.DenseAxisArray,Vector{Float64}},Float64}()
+copy_parts!(projnet_npv, projnet)
+
+projnet_npv[:,:C] = [0,-140,318,312,-329,153,193,361,24,33,387,-386,171,0]
+
+# before running NPV minimization, need to run forward/backward passes
+toposort = forward_pass!(projnet_npv)
+backward_pass!(projnet_npv, toposort)
+
+cV, cE = find_critical_path(projnet_npv)
+
+cg = Subobject(projnet_npv, V=cV, E=cE)
+to_graphviz(cg, node_labels=:label)
+
 jumpmod = JuMP.Model(HiGHS.Optimizer)
 
-# dv: when does each task start?
-@variable(
-    jumpmod,
-    0 ≤ t[v in vertices(projnet_lp)]
-)
-
-projnet_lp[:,:t] = jumpmod[:t]
-
-# wlog, start project begins at 0
-@constraint(
-    jumpmod,
-    projnet_lp[1,:t] == 0
-)
-
-@constraint(
-    jumpmod,
-    [e ∈ edges(projnet_lp)],
-    projnet_lp[e, (:tgt, :t)] - projnet_lp[e, (:src, :t)] ≥ projnet_lp[e, (:src, :duration)]
-)
-
-# minimize overall time
-@objective(
-    jumpmod,
-    Min,
-    projnet_lp[nv(projnet_lp),:t]
-)
-
-optimize!(jumpmod)
-    
-projnet_lp[:,:t] = value.(projnet_lp[:,:t])
-
+# dv: when does each task finish?
+for v in vertices(projnet_npv)
+    x = @variable(
+        jumpmod,
+        [t ∈ projnet_npv[v,:ef]:projnet_npv[v,:lf]],
+        Bin
+    )
+    @constraint(
+        jumpmod,
+        sum(x) == 1
+    )
+    projnet_npv[v,:x] = x
+end
 
 x
 
