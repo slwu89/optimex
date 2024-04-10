@@ -175,7 +175,7 @@ end
 # in the book, this constraint is indexed over nodes; it's much nicer to index it over edges
 @constraint(
     jumpmod,
-    [e ∈ edges(jumpmod)],
+    [e ∈ edges(projnet_npv)],
     g[e, (:tgt, :t)] - g[e, (:src, :t)] ≥ g[e, (:src, :duration)]
 )
 
@@ -190,6 +190,15 @@ first.(getfield.(keys(x),:I))
 
 #does the trick
 axes(x,1)
+
+e=8
+
+axes(projnet_npv[e, (:tgt, :x)],1)
+projnet_npv[e, (:tgt, :x)]
+projnet_npv[e, [:tgt, :x]]
+
+projnet_npv[e, [:tgt,:label]]
+projnet_npv[8, :x]
 
 x
 

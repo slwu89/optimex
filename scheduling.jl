@@ -105,7 +105,7 @@ function optimize_ProjGraphLP(g::T) where {T<:AbstractProjGraphLP}
         g[1,:t] == 0
     )
     
-    # projects can only begin after predecessors finishe
+    # projects can only begin after predecessors finish
     @constraint(
         jumpmod,
         [e ∈ edges(g)],
