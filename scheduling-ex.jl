@@ -127,6 +127,23 @@ proj_jump = optimize_ProjGraphLP(projnet_lp)
 @assert projnet_lp[1,:t] == 0
 @assert projnet_lp[nv(projnet_lp),:t] == 17
 
+# redo as LP: fig 7.4 from Eiselt, H. A., & Sandblom, C. L. (2022). Operations research: A model-based approach.
+proj_df = DataFrame(
+    Activity = [:start,:A,:B,:C,:D,:end],
+    Predecessor = [
+        [], [:start], [:start], [:A,:B], [:A,:B], [:C,:D]
+    ],
+    Duration = [0,5,4,7,8,0]
+)
+
+projnet = make_ProjGraph(proj_df)
+to_graphviz(projnet, node_labels=:label)
+
+projnet_lp = ProjGraphLP{Symbol,Int,VarType}()
+copy_parts!(projnet_lp, projnet)
+
+proj_jump = optimize_ProjGraphLP(projnet_lp)
+projnet_lp[:,:t]
 
 # --------------------------------------------------------------------------------
 # CPM/optimization of NPV
