@@ -1,6 +1,6 @@
 using DataFrames
 using Distributions
-using JuMP, HiGHS
+using JuMP
 using Catlab, DataMigrations
 using BenchmarkTools, MarkdownTables
 
@@ -51,7 +51,7 @@ select!(KLM, Not(:value))
         for (jj, kk, l) in eachrow(JKL) if jj == j && kk == k
         for (kkk, ll, m) in eachrow(KLM) if kkk == k && ll == l
     ]
-    model = JuMP.Model(HiGHS.Optimizer)
+    model = JuMP.Model()
     set_silent(model)
     @variable(model, x[x_list] >= 0)
     @constraint(
@@ -59,7 +59,6 @@ select!(KLM, Not(:value))
         [i in I], 
         sum(x[k] for k in x_list if k[1] == i) >= 0
     )
-    optimize!(model)
 end
 
 # DataFrames
@@ -69,13 +68,12 @@ end
         KLM;
         on = [:k, :l],
     )
-    model = JuMP.Model(HiGHS.Optimizer)
+    model = JuMP.Model()
     set_silent(model)
     ijklm[!, :x] = @variable(model, x[1:size(ijklm, 1)] >= 0)
     for df in DataFrames.groupby(ijklm, :i)
         @constraint(model, sum(df.x) >= 0)
     end
-    optimize!(model)
 end
 
 # acsets
@@ -126,13 +124,12 @@ end
 
 @benchmark let
     ijklm = query(ijklm_dat, connected_paths_query)
-    model = JuMP.Model(HiGHS.Optimizer)
+    model = JuMP.Model()
     set_silent(model)
     ijklm[!, :x] = @variable(model, x[1:size(ijklm, 1)] >= 0)
     for df in DataFrames.groupby(ijklm, :i)
         @constraint(model, sum(df.x) >= 0)
     end
-    optimize!(model)
 end
 
 
@@ -180,14 +177,14 @@ M = @migration IJKLMRelSch IJKLMSch begin
     m => m
 end;
 
+ijklm = migrate(IJKLMRelType, ijklm_dat, M)
 
 @benchmark let
     ijklm = migrate(IJKLMRelType, ijklm_dat, M)
-    model = JuMP.Model(HiGHS.Optimizer)
+    model = JuMP.Model()
     set_silent(model)
     @variable(model, x[parts(ijklm,:IJKLM)] >= 0)
     for i in parts(ijklm,:I)
         @constraint(model, sum(x[incident(ijklm,i,:i)]) >= 0)
     end
-    optimize!(model)
 end

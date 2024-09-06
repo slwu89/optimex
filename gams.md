@@ -109,7 +109,7 @@ As we know this is the slow one.
         for (jj, kk, l) in eachrow(JKL) if jj == j && kk == k
         for (kkk, ll, m) in eachrow(KLM) if kkk == k && ll == l
     ]
-    model = JuMP.Model(HiGHS.Optimizer)
+    model = JuMP.Model()
     set_silent(model)
     @variable(model, x[x_list] >= 0)
     @constraint(
@@ -117,20 +117,19 @@ As we know this is the slow one.
         [i in I], 
         sum(x[k] for k in x_list if k[1] == i) >= 0
     )
-    optimize!(model)
 end
 ```
 
-    BenchmarkTools.Trial: 10 samples with 1 evaluation.
-     Range (min … max):  504.057 ms … 531.059 ms  ┊ GC (min … max): 2.68% … 2.92%
-     Time  (median):     510.903 ms               ┊ GC (median):    2.71%
-     Time  (mean ± σ):   511.854 ms ±   8.323 ms  ┊ GC (mean ± σ):  2.73% ± 0.13%
+    BenchmarkTools.Trial: 12 samples with 1 evaluation.
+     Range (min … max):  409.517 ms … 472.865 ms  ┊ GC (min … max): 2.95% … 3.03%
+     Time  (median):     413.812 ms               ┊ GC (median):    2.99%
+     Time  (mean ± σ):   424.335 ms ±  22.983 ms  ┊ GC (mean ± σ):  2.98% ± 0.28%
 
-      █  ▁ ▁      ▁     ▁▁▁              ▁                        ▁  
-      █▁▁█▁█▁▁▁▁▁▁█▁▁▁▁▁███▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█ ▁
-      504 ms           Histogram: frequency by time          531 ms <
+      █ ▁                                                            
+      █▁█▁▁▆▆▁▁▁▁▁▆▁▁▁▁▁▁▁▁▆▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▆▁▆ ▁
+      410 ms           Histogram: frequency by time          473 ms <
 
-     Memory estimate: 255.88 MiB, allocs estimate: 6632216.
+     Memory estimate: 250.75 MiB, allocs estimate: 6523150.
 
 ## The DataFrames version
 
@@ -149,26 +148,25 @@ ijklm_df = DataFrames.innerjoin(
         KLM;
         on = [:k, :l],
     )
-    model = JuMP.Model(HiGHS.Optimizer)
+    model = JuMP.Model()
     set_silent(model)
     ijklm[!, :x] = @variable(model, x[1:size(ijklm, 1)] >= 0)
     for df in DataFrames.groupby(ijklm, :i)
         @constraint(model, sum(df.x) >= 0)
     end
-    optimize!(model)
 end
 ```
 
-    BenchmarkTools.Trial: 1117 samples with 1 evaluation.
-     Range (min … max):  4.015 ms … 15.797 ms  ┊ GC (min … max): 0.00% … 57.44%
-     Time  (median):     4.194 ms              ┊ GC (median):    0.00%
-     Time  (mean ± σ):   4.474 ms ±  1.554 ms  ┊ GC (mean ± σ):  4.49% ±  8.65%
+    BenchmarkTools.Trial: 5623 samples with 1 evaluation.
+     Range (min … max):  772.000 μs …   3.607 ms  ┊ GC (min … max): 0.00% … 71.73%
+     Time  (median):     817.875 μs               ┊ GC (median):    0.00%
+     Time  (mean ± σ):   887.950 μs ± 352.094 μs  ┊ GC (mean ± σ):  7.70% ± 12.86%
 
-      ▇█▂                                                         
-      ███▇▅▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▁▄▁▁▄▁▄▄▄▄▁▄▁▄▄▄▁▆▆ ▇
-      4.01 ms      Histogram: log(frequency) by time     13.9 ms <
+      ▇█▅▂                                                          ▁
+      █████▇▆▅▄▁▁▄▁▁▃▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃▁▁▄▅▃▅▅▅▆▇▇▆▇▇▇▇▆▆▆▆ █
+      772 μs        Histogram: log(frequency) by time       2.72 ms <
 
-     Memory estimate: 3.41 MiB, allocs estimate: 33145.
+     Memory estimate: 1.77 MiB, allocs estimate: 16129.
 
 ## The Acsets version
 
@@ -301,11 +299,11 @@ ijklm_query[1:5,:] |> markdown_table
 
 | i   | j   | k   | l   | m   |
 |-----|-----|-----|-----|-----|
-| 37  | 3   | 1   | 3   | 15  |
-| 37  | 3   | 1   | 3   | 19  |
-| 41  | 3   | 1   | 3   | 15  |
-| 41  | 3   | 1   | 3   | 19  |
-| 48  | 3   | 1   | 3   | 15  |
+| 46  | 4   | 1   | 6   | 19  |
+| 50  | 4   | 1   | 6   | 19  |
+| 61  | 4   | 1   | 6   | 19  |
+| 71  | 4   | 1   | 6   | 19  |
+| 9   | 5   | 1   | 2   | 1   |
 
 Now that we know they are equal, we can go ahead and see how fast the
 acsets version is. The fact that the acsets based query is right on the
@@ -318,26 +316,25 @@ via foreign keys).
 ``` julia
 @benchmark let
     ijklm = query(ijklm_acs, connected_paths_query)
-    model = JuMP.Model(HiGHS.Optimizer)
+    model = JuMP.Model()
     set_silent(model)
     ijklm[!, :x] = @variable(model, x[1:size(ijklm, 1)] >= 0)
     for df in DataFrames.groupby(ijklm, :i)
         @constraint(model, sum(df.x) >= 0)
     end
-    optimize!(model)
 end
 ```
 
-    BenchmarkTools.Trial: 948 samples with 1 evaluation.
-     Range (min … max):  4.499 ms … 20.385 ms  ┊ GC (min … max): 0.00% … 0.00%
-     Time  (median):     4.736 ms              ┊ GC (median):    0.00%
-     Time  (mean ± σ):   5.273 ms ±  1.969 ms  ┊ GC (mean ± σ):  4.69% ± 8.99%
+    BenchmarkTools.Trial: 3815 samples with 1 evaluation.
+     Range (min … max):  1.143 ms …   3.385 ms  ┊ GC (min … max): 0.00% … 56.65%
+     Time  (median):     1.206 ms               ┊ GC (median):    0.00%
+     Time  (mean ± σ):   1.309 ms ± 423.826 μs  ┊ GC (mean ± σ):  6.92% ± 12.43%
 
-      ▆█▄▂▂▂                                                      
-      ███████▇▆▇▅▄▅▄▁▄▁▄▄▅▁▁▄▁▄▁▁▁▅▁▁▁▁▁▁▁▁▁▄▁▁▅▁▄▅▄▅▁▄▅▄▅▆▅▅▁▄▅ ▇
-      4.5 ms       Histogram: log(frequency) by time     15.3 ms <
+      ▆█▇▂    ▂                                                   ▁
+      █████▆▅███▅▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▃▇▇▇██▇▇▇▇▇ █
+      1.14 ms      Histogram: log(frequency) by time      3.22 ms <
 
-     Memory estimate: 4.20 MiB, allocs estimate: 39698.
+     Memory estimate: 2.63 MiB, allocs estimate: 22422.
 
 ### Data Migrations between Acsets
 
@@ -474,11 +471,11 @@ pretty_tables(ijklm_migrate_acset, tables=[:IJKLM], max_num_of_rows=5)
     ┌───────┬────┬───┬───┬───┬────┐
     │ IJKLM │  i │ j │ k │ l │  m │
     ├───────┼────┼───┼───┼───┼────┤
-    │     1 │ 37 │ 3 │ 1 │ 3 │ 15 │
-    │     2 │ 37 │ 3 │ 1 │ 3 │ 19 │
-    │     3 │ 41 │ 3 │ 1 │ 3 │ 15 │
-    │     4 │ 41 │ 3 │ 1 │ 3 │ 19 │
-    │     5 │ 48 │ 3 │ 1 │ 3 │ 15 │
+    │     1 │ 46 │ 4 │ 1 │ 6 │ 19 │
+    │     2 │ 50 │ 4 │ 1 │ 6 │ 19 │
+    │     3 │ 61 │ 4 │ 1 │ 6 │ 19 │
+    │     4 │ 71 │ 4 │ 1 │ 6 │ 19 │
+    │     5 │  9 │ 5 │ 1 │ 2 │  1 │
     └───────┴────┴───┴───┴───┴────┘
 
 Once again, let’s benchmark:
@@ -486,23 +483,22 @@ Once again, let’s benchmark:
 ``` julia
 @benchmark let
     ijklm = migrate(IJKLMRelType, ijklm_acs, M)
-    model = JuMP.Model(HiGHS.Optimizer)
+    model = JuMP.Model()
     set_silent(model)
     @variable(model, x[parts(ijklm,:IJKLM)] >= 0)
     for i in parts(ijklm,:I)
         @constraint(model, sum(x[incident(ijklm,i,:i)]) >= 0)
     end
-    optimize!(model)
 end
 ```
 
-    BenchmarkTools.Trial: 751 samples with 1 evaluation.
-     Range (min … max):  5.947 ms … 13.427 ms  ┊ GC (min … max): 0.00% … 42.78%
-     Time  (median):     6.188 ms              ┊ GC (median):    0.00%
-     Time  (mean ± σ):   6.658 ms ±  1.598 ms  ┊ GC (mean ± σ):  5.65% ± 10.66%
+    BenchmarkTools.Trial: 1726 samples with 1 evaluation.
+     Range (min … max):  2.298 ms …  10.142 ms  ┊ GC (min … max): 0.00% …  0.00%
+     Time  (median):     2.635 ms               ┊ GC (median):    0.00%
+     Time  (mean ± σ):   2.893 ms ± 791.563 μs  ┊ GC (mean ± σ):  8.00% ± 13.56%
 
-      ▃█▇▄                                                        
-      ████▇▇▅▅▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▁▄▄▅▅▅▅▇▆▅▄▅▄▅▅▅▆▅▅▅ ▇
-      5.95 ms      Histogram: log(frequency) by time       13 ms <
+      ▆█▆▆▅▅▆▆▅▄▄▃▃▃▂▁▂▂▁                   ▁                     ▁
+      ███████████████████▇█▇▇▄▆▅▅▁▅▄▁▁▅▆▅▆█▇███▆███▆██▇▇▇██▆▄▅▅▇▅ █
+      2.3 ms       Histogram: log(frequency) by time      5.44 ms <
 
-     Memory estimate: 8.87 MiB, allocs estimate: 59207.
+     Memory estimate: 6.78 MiB, allocs estimate: 40545.
