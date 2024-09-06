@@ -1,6 +1,6 @@
 # IJKLM model
 Sean L. Wu
-2023-11-13
+2024-09-05
 
 ## The IJKLM model
 
@@ -19,14 +19,12 @@ announced on a [Discourse
 thread](https://discourse.julialang.org/t/jump-developers-response-to-benchmarks-by-gams/101920).
 They used a DataFrames.jl based solution that was very fast.
 
-The backstory is filled with intrigue, no doubt, but I’m interested to
-see if acsets can provide an alterative way to generate this model. The
-original data is reproducible at
-[justine18/performance_experiment](https://github.com/justine18/performance_experiment),
-but I decided to just redo it in Julia as the writing/reading to/from
-JSON files is a pain in the butt.
+I’m interested to see if acsets can provide an alterative way to
+generate this model. The original data is reproducible at
+[justine18/performance_experiment](https://github.com/justine18/performance_experiment).
+I replicated the Python data generation code in Julia.
 
-By the way, the model is given as:
+The model is given as:
 
 $$\text{min} \ z = 1$$
 
@@ -34,9 +32,9 @@ $$\sum_{(j,k):(i,j,k) \in \mathcal{IJK}} \ \sum_{l:(j,k,l) \in \mathcal{JKL}} \ 
 
 $$x_{i,j,k,l,m} \ge 0 \hspace{1cm} \forall \ (i,j,k) \in \mathcal{IJK}, l:(j,k,l) \in \mathcal{JKL}, m:(k,l,m) \in \mathcal{KLM} $$
 
-The blog post calls subsets of Cartesian products “maps”, which seems to
-be confused as a “map” is generally understood to be a function in math.
-General subsets of products are known as “relations”.
+The GAMS blog post calls subsets of Cartesian products “maps”, which
+seems to be confused as a “map” is generally understood to be a function
+in math. General subsets of products are known as “relations”.
 
 ## Data generation
 
@@ -81,21 +79,22 @@ M = ["m$x" for x in 1:m]
 IJK = DataFrame(Iterators.product(I,J,K))
 rename!(IJK, [:i,:j,:k])
 IJK.value = SampleBinomialVec(I,J,K)
+filter!(:value => v -> v != 0, IJK)
+select!(IJK, Not(:value))
 
 # make JKL
 JKL = DataFrame(Iterators.product(J,K,L))
 rename!(JKL, [:j,:k,:l])
 JKL.value = SampleBinomialVec(J,K,L)
+filter!(:value => v -> v != 0, JKL)
+select!(JKL, Not(:value))
 
 # make KLM
 KLM = DataFrame(Iterators.product(K,L,M))
 rename!(KLM, [:k,:l,:m])
 KLM.value = SampleBinomialVec(K,L,M)
-
-# make the products just general sparse relations
-IJK_sparse = [(x.i, x.j, x.k) for x in eachrow(IJK) if x.value == true]
-JKL_sparse = [(x.j, x.k, x.l) for x in eachrow(JKL) if x.value == true]
-KLM_sparse = [(x.k, x.l, x.m) for x in eachrow(KLM) if x.value == true]
+filter!(:value => v -> v != 0, KLM)
+select!(KLM, Not(:value))
 ```
 
 ## The “intuitive” formulation
@@ -106,9 +105,9 @@ As we know this is the slow one.
 @benchmark let 
     x_list = [
         (i, j, k, l, m)
-        for (i, j, k) in IJK_sparse
-        for (jj, kk, l) in JKL_sparse if jj == j && kk == k
-        for (kkk, ll, m) in KLM_sparse if kkk == k && ll == l
+        for (i, j, k) in eachrow(IJK)
+        for (jj, kk, l) in eachrow(JKL) if jj == j && kk == k
+        for (kkk, ll, m) in eachrow(KLM) if kkk == k && ll == l
     ]
     model = JuMP.Model(HiGHS.Optimizer)
     set_silent(model)
@@ -122,45 +121,32 @@ As we know this is the slow one.
 end
 ```
 
-    BenchmarkTools.Trial: 172 samples with 1 evaluation.
-     Range (min … max):  24.505 ms … 231.182 ms  ┊ GC (min … max): 0.00% … 87.80%
-     Time  (median):     27.174 ms               ┊ GC (median):    0.00%
-     Time  (mean ± σ):   29.098 ms ±  15.692 ms  ┊ GC (mean ± σ):  9.31% ±  9.35%
+    BenchmarkTools.Trial: 10 samples with 1 evaluation.
+     Range (min … max):  504.057 ms … 531.059 ms  ┊ GC (min … max): 2.68% … 2.92%
+     Time  (median):     510.903 ms               ┊ GC (median):    2.71%
+     Time  (mean ± σ):   511.854 ms ±   8.323 ms  ┊ GC (mean ± σ):  2.73% ± 0.13%
 
-      ▆   ▃▁▆██ ▄▄▄▃ ▁▄       ▃    ▁   ▁ ▃▃  ▁     ▁      ▁         
-      █▇▇▄█████▇████▇██▄▇▁▆▄▇▁█▁▄▆▄█▇▆▆█▇██▇▆█▁▆▇▁▁█▆▇▆▁▄▄█▄▄▆▄▁▄▄ ▄
-      24.5 ms         Histogram: frequency by time         33.3 ms <
+      █  ▁ ▁      ▁     ▁▁▁              ▁                        ▁  
+      █▁▁█▁█▁▁▁▁▁▁█▁▁▁▁▁███▁▁▁▁▁▁▁▁▁▁▁▁▁▁█▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█ ▁
+      504 ms           Histogram: frequency by time          531 ms <
 
-     Memory estimate: 31.87 MiB, allocs estimate: 644032.
+     Memory estimate: 255.88 MiB, allocs estimate: 6632216.
 
 ## The DataFrames version
 
-The fast one at the JuMP blog link.
+This is the fast DataFrames.jl based solution at JuMP blog link.
 
 ``` julia
-IJK_sparse_df = filter(x -> x.value == 1, IJK)
-select!(IJK_sparse_df, Not(:value))
-
-JKL_sparse_df = filter(x -> x.value == 1, JKL)
-select!(JKL_sparse_df, Not(:value))
-
-KLM_sparse_df = filter(x -> x.value == 1, KLM)
-select!(KLM_sparse_df, Not(:value))
-
 ijklm_df = DataFrames.innerjoin(
-    DataFrames.innerjoin(IJK_sparse_df, JKL_sparse_df; on = [:j, :k]),
-    KLM_sparse_df;
+    DataFrames.innerjoin(IJK, JKL; on = [:j, :k]),
+    KLM;
     on = [:k, :l],
 )
-```
 
-Let’s benchmark it.
-
-``` julia
 @benchmark let
     ijklm = DataFrames.innerjoin(
-        DataFrames.innerjoin(IJK_sparse_df, JKL_sparse_df; on = [:j, :k]),
-        KLM_sparse_df;
+        DataFrames.innerjoin(IJK, JKL; on = [:j, :k]),
+        KLM;
         on = [:k, :l],
     )
     model = JuMP.Model(HiGHS.Optimizer)
@@ -173,18 +159,18 @@ Let’s benchmark it.
 end
 ```
 
-    BenchmarkTools.Trial: 832 samples with 1 evaluation.
-     Range (min … max):  4.864 ms … 227.252 ms  ┊ GC (min … max): 0.00% … 90.82%
-     Time  (median):     5.169 ms               ┊ GC (median):    0.00%
-     Time  (mean ± σ):   6.009 ms ±   7.984 ms  ┊ GC (mean ± σ):  7.46% ±  8.65%
+    BenchmarkTools.Trial: 1117 samples with 1 evaluation.
+     Range (min … max):  4.015 ms … 15.797 ms  ┊ GC (min … max): 0.00% … 57.44%
+     Time  (median):     4.194 ms              ┊ GC (median):    0.00%
+     Time  (mean ± σ):   4.474 ms ±  1.554 ms  ┊ GC (mean ± σ):  4.49% ±  8.65%
 
-      █▃                                                           
-      ██▆▆▅▃▃▃▃▃▃▂▂▂▂▁▂▂▂▁▁▂▁▁▁▂▁▁▁▂▁▁▁▁▂▁▁▁▁▁▁▂▁▂▂▂▂▂▁▂▂▁▁▂▁▂▂▁▂ ▂
-      4.86 ms         Histogram: frequency by time          16 ms <
+      ▇█▂                                                         
+      ███▇▅▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▁▄▁▁▄▁▄▄▄▄▁▄▁▄▄▄▁▆▆ ▇
+      4.01 ms      Histogram: log(frequency) by time     13.9 ms <
 
-     Memory estimate: 3.29 MiB, allocs estimate: 32791.
+     Memory estimate: 3.41 MiB, allocs estimate: 33145.
 
-## The acsets version
+## The Acsets version
 
 Acsets (Attributed C-Sets) are a nifty data structure coming from
 applied category theory, but its not too far off to think of them just
@@ -218,101 +204,44 @@ of the binomial random draw that is used to “sparsify” the data.
     KLM_K::Hom(KLM,K)
     KLM_L::Hom(KLM,L)
     KLM_M::Hom(KLM,M)
-    IntAttr::AttrType
-    value_ijk::Attr(IJK,IntAttr)
-    value_jkl::Attr(JKL,IntAttr)
-    value_klm::Attr(KLM,IntAttr)
 end
 
 Catlab.to_graphviz(IJKLMSch, graph_attrs=Dict(:dpi=>"72",:ratio=>"expand",:size=>"8"))
 ```
 
-![](gams_files/figure-commonmark/cell-7-output-1.svg)
+![](gams_files/figure-commonmark/cell-6-output-1.svg)
 
 Now we programatically generate the data type (and functions to work
-with it) for our schema, and fill it with data. The code is verbose, but
-we’re storing all the sets and relations in a single data structure.
+with it) for our schema, and fill it with data.
 
 ``` julia
 @acset_type IJKLMData(IJKLMSch, index=[:IJK_I,:IJK_J,:IJK_K,:JKL_J,:JKL_K,:JKL_L,:KLM_K,:KLM_L,:KLM_M])
 
-# the basic sets
-I = collect(1:n)
-J = collect(1:m)
-K = collect(1:m)
-L = collect(1:m)
-M = collect(1:m)
+ijklm_acs = @acset IJKLMData begin
+    I = n
+    J = m
+    K = m
+    L = m
+    M = m
 
-# make the data
-ijklm_dat = IJKLMData{Int}()
+    IJK = nrow(IJK)
+    IJK_I = [parse(Int, i[2:end]) for i in IJK.i]
+    IJK_J = [parse(Int, j[2:end]) for j in IJK.j]
+    IJK_K = [parse(Int, k[2:end]) for k in IJK.k]
 
-add_parts!(ijklm_dat, :I, length(I))
-add_parts!(ijklm_dat, :J, length(J))
-add_parts!(ijklm_dat, :K, length(K))
-add_parts!(ijklm_dat, :L, length(L))
-add_parts!(ijklm_dat, :M, length(M))
+    JKL = nrow(JKL)
+    JKL_J = [parse(Int, j[2:end]) for j in JKL.j]
+    JKL_K = [parse(Int, k[2:end]) for k in JKL.k]
+    JKL_L = [parse(Int, l[2:end]) for l in JKL.l]
 
-# add the relations...first as product...then sparsify
-
-# IJK
-ijk_prod = Iterators.product(I,J,K)
-
-add_parts!(
-    ijklm_dat, 
-    :IJK,
-    length(ijk_prod),
-    IJK_I=vec([e[1] for e in ijk_prod]),
-    IJK_J=vec([e[2] for e in ijk_prod]),
-    IJK_K=vec([e[3] for e in ijk_prod]),
-    value_ijk=IJK.value
-)
-
-rem_parts!(
-    ijklm_dat, 
-    :IJK, 
-    findall(ijklm_dat[:,:value_ijk] .== 0)
-)
-
-# JKL
-jkl_prod = Iterators.product(J,K,L)
-
-add_parts!(
-    ijklm_dat, 
-    :JKL,
-    length(jkl_prod),
-    JKL_J=vec([e[1] for e in jkl_prod]),
-    JKL_K=vec([e[2] for e in jkl_prod]),
-    JKL_L=vec([e[3] for e in jkl_prod]),
-    value_jkl=JKL.value
-)
-
-rem_parts!(
-    ijklm_dat, 
-    :JKL, 
-    findall(ijklm_dat[:,:value_jkl] .== 0)
-)
-
-# KLM
-klm_prod = Iterators.product(K,L,M)
-
-add_parts!(
-    ijklm_dat, 
-    :KLM,
-    length(klm_prod),
-    KLM_K=vec([e[1] for e in klm_prod]),
-    KLM_L=vec([e[2] for e in klm_prod]),
-    KLM_M=vec([e[3] for e in klm_prod]),
-    value_klm=KLM.value
-)
-
-rem_parts!(
-    ijklm_dat, 
-    :KLM, 
-    findall(ijklm_dat[:,:value_klm] .== 0)
-)
+    KLM = nrow(KLM)
+    KLM_K = [parse(Int, k[2:end]) for k in KLM.k]
+    KLM_L = [parse(Int, l[2:end]) for l in KLM.l]
+    KLM_M = [parse(Int, m[2:end]) for m in KLM.m]
+end;
 ```
 
-### conjunctive queries on acsets
+### Conjunctive Queries on Acsets
 
 Now, the critical thing that the JuMP devs did to speed thing up was to
 replace the for loops with 2 inner joins, to get the “paths” through the
@@ -331,7 +260,7 @@ end
 Catlab.to_graphviz(connected_paths_query, box_labels=:name, junction_labels=:variable, graph_attrs=Dict(:dpi=>"72",:size=>"3.5",:ratio=>"expand"))
 ```
 
-![](gams_files/figure-commonmark/cell-9-output-1.svg)
+![](gams_files/figure-commonmark/cell-8-output-1.svg)
 
 While the blog post should be consulted for a complete explanation, the
 conjunctive query is expressed using an undirected wiring diagram (UWD)
@@ -360,7 +289,7 @@ data frame methods return the same number of rows, and look at the
 output.
 
 ``` julia
-ijklm_query = query(ijklm_dat, connected_paths_query)
+ijklm_query = query(ijklm_acs, connected_paths_query)
 size(ijklm_query) == size(ijklm_df)
 ```
 
@@ -372,11 +301,11 @@ ijklm_query[1:5,:] |> markdown_table
 
 | i   | j   | k   | l   | m   |
 |-----|-----|-----|-----|-----|
-| 80  | 18  | 3   | 10  | 5   |
-| 80  | 18  | 3   | 15  | 19  |
-| 80  | 18  | 3   | 15  | 17  |
-| 82  | 18  | 3   | 10  | 5   |
-| 82  | 18  | 3   | 15  | 19  |
+| 37  | 3   | 1   | 3   | 15  |
+| 37  | 3   | 1   | 3   | 19  |
+| 41  | 3   | 1   | 3   | 15  |
+| 41  | 3   | 1   | 3   | 19  |
+| 48  | 3   | 1   | 3   | 15  |
 
 Now that we know they are equal, we can go ahead and see how fast the
 acsets version is. The fact that the acsets based query is right on the
@@ -388,7 +317,7 @@ via foreign keys).
 
 ``` julia
 @benchmark let
-    ijklm = query(ijklm_dat, connected_paths_query)
+    ijklm = query(ijklm_acs, connected_paths_query)
     model = JuMP.Model(HiGHS.Optimizer)
     set_silent(model)
     ijklm[!, :x] = @variable(model, x[1:size(ijklm, 1)] >= 0)
@@ -399,18 +328,18 @@ via foreign keys).
 end
 ```
 
-    BenchmarkTools.Trial: 823 samples with 1 evaluation.
-     Range (min … max):  5.298 ms … 247.162 ms  ┊ GC (min … max): 0.00% … 90.30%
-     Time  (median):     5.500 ms               ┊ GC (median):    0.00%
-     Time  (mean ± σ):   6.074 ms ±   8.580 ms  ┊ GC (mean ± σ):  7.71% ±  8.25%
+    BenchmarkTools.Trial: 948 samples with 1 evaluation.
+     Range (min … max):  4.499 ms … 20.385 ms  ┊ GC (min … max): 0.00% … 0.00%
+     Time  (median):     4.736 ms              ┊ GC (median):    0.00%
+     Time  (mean ± σ):   5.273 ms ±  1.969 ms  ┊ GC (mean ± σ):  4.69% ± 8.99%
 
-      ▆█▄                                                          
-      ████▆▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▄▁▁▁▆▄▆ ▇
-      5.3 ms       Histogram: log(frequency) by time      15.2 ms <
+      ▆█▄▂▂▂                                                      
+      ███████▇▆▇▅▄▅▄▁▄▁▄▄▅▁▁▄▁▄▁▁▁▅▁▁▁▁▁▁▁▁▁▄▁▁▅▁▄▅▄▅▁▄▅▄▅▆▅▅▁▄▅ ▇
+      4.5 ms       Histogram: log(frequency) by time     15.3 ms <
 
-     Memory estimate: 4.21 MiB, allocs estimate: 39290.
+     Memory estimate: 4.20 MiB, allocs estimate: 39698.
 
-### data migrations of acsets
+### Data Migrations between Acsets
 
 While the query execution in the previous section is already quite
 useful for practical application, it does have one downside, and that is
@@ -454,7 +383,7 @@ end
 Catlab.to_graphviz(IJKLMRelSch, graph_attrs=Dict(:dpi=>"72",:ratio=>"expand",:size=>"3.5"))
 ```
 
-![](gams_files/figure-commonmark/cell-13-output-1.svg)
+![](gams_files/figure-commonmark/cell-12-output-1.svg)
 
 Now we formulate the data migration, using tools from the
 [AlgebraicJulia/DataMigrations.jl](https://github.com/AlgebraicJulia/DataMigrations.jl)
@@ -500,10 +429,8 @@ M = @migration IJKLMRelSch IJKLMSch begin
     k => k
     l => l
     m => m
-end
+end;
 ```
-
-    DataMigration{Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, TypeCat{SimpleDiagram{GATlab.Stdlib.StdModels.op, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, D} where D<:(Functor{<:Category{Ob, Hom, Catlab.CategoricalAlgebra.FinCats.FinCatSize} where {Ob, Hom}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}}), Catlab.CategoricalAlgebra.Diagrams.SimpleDiagramHom{GATlab.Stdlib.StdModels.op, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Any, Any}}, Catlab.CategoricalAlgebra.FinCats.FinTransformationMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Any, Any}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}}, Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:id}}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:generator}}}}}, Dict{Symbol, SimpleDiagram{GATlab.Stdlib.StdModels.op, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, D} where D<:(Functor{<:Category{Ob, Hom, Catlab.CategoricalAlgebra.FinCats.FinCatSize} where {Ob, Hom}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}})}, Dict{Symbol, Catlab.CategoricalAlgebra.Diagrams.SimpleDiagramHom{GATlab.Stdlib.StdModels.op, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Any, Any}}, Catlab.CategoricalAlgebra.FinCats.FinTransformationMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Any, Any}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}}, Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:id}}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:generator}}}}}}, Dict{Any, Union{}}}(FinDomFunctor(Dict{Symbol, SimpleDiagram{GATlab.Stdlib.StdModels.op, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, D} where D<:(Functor{<:Category{Ob, Hom, Catlab.CategoricalAlgebra.FinCats.FinCatSize} where {Ob, Hom}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}})}(:IJKLM => Diagram{op}(FinFunctor(Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}(:l => L, :m => M, :klm => KLM, :k => K, :ijk => IJK, :j => J, :jkl => JKL, :i => I), Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:generator}}(Symbol("##unnamedhom#9") => KLM_M, Symbol("##unnamedhom#5") => JKL_K, Symbol("##unnamedhom#1") => IJK_I, Symbol("##unnamedhom#4") => IJK_K, Symbol("##unnamedhom#3") => JKL_J, Symbol("##unnamedhom#2") => IJK_J, Symbol("##unnamedhom#6") => KLM_K, Symbol("##unnamedhom#8") => KLM_L, Symbol("##unnamedhom#7") => JKL_L), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[ijk, jkl, klm, i, j, k, l, m], Hom = Hom{:generator}[##unnamedhom#1, ##unnamedhom#2, ##unnamedhom#3, ##unnamedhom#4, ##unnamedhom#5, ##unnamedhom#6, ##unnamedhom#7, ##unnamedhom#8, ##unnamedhom#9], AttrType = AttrType{:generator}[], Attr = Attr{:generator}[]), Dict(:j=>(:Ob=>5), Symbol("##unnamedhom#4")=>(:Hom=>4), Symbol("##unnamedhom#8")=>(:Hom=>8), Symbol("##unnamedhom#9")=>(:Hom=>9), :l=>(:Ob=>7), :jkl=>(:Ob=>2), Symbol("##unnamedhom#7")=>(:Hom=>7), Symbol("##unnamedhom#5")=>(:Hom=>5), :ijk=>(:Ob=>1), :klm=>(:Ob=>3)…), Pair[])), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[I, J, K, L, M, IJK, JKL, KLM], Hom = Hom{:generator}[IJK_I, IJK_J, IJK_K, JKL_J, JKL_K, JKL_L, KLM_K, KLM_L, KLM_M], AttrType = AttrType{:generator}[IntAttr], Attr = Attr{:generator}[value_ijk, value_jkl, value_klm]), Dict(:KLM=>(:Ob=>8), :IJK_J=>(:Hom=>2), :IntAttr=>(:AttrType=>1), :JKL=>(:Ob=>7), :JKL_J=>(:Hom=>4), :IJK=>(:Ob=>6), :K=>(:Ob=>3), :KLM_L=>(:Hom=>8), :JKL_K=>(:Hom=>5), :M=>(:Ob=>5)…), Pair[])))), :I => Diagram{op}(FinFunctor(Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}(:I => I), Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}(), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[I], Hom = Hom{:generator}[], AttrType = AttrType{:generator}[], Attr = Attr{:generator}[]), Dict(:I=>(:Ob=>1)), Pair[])), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[I, J, K, L, M, IJK, JKL, KLM], Hom = Hom{:generator}[IJK_I, IJK_J, IJK_K, JKL_J, JKL_K, JKL_L, KLM_K, KLM_L, KLM_M], AttrType = AttrType{:generator}[IntAttr], Attr = Attr{:generator}[value_ijk, value_jkl, value_klm]), Dict(:KLM=>(:Ob=>8), :IJK_J=>(:Hom=>2), :IntAttr=>(:AttrType=>1), :JKL=>(:Ob=>7), :JKL_J=>(:Hom=>4), :IJK=>(:Ob=>6), :K=>(:Ob=>3), :KLM_L=>(:Hom=>8), :JKL_K=>(:Hom=>5), :M=>(:Ob=>5)…), Pair[])))), :M => Diagram{op}(FinFunctor(Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}(:M => M), Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}(), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[M], Hom = Hom{:generator}[], AttrType = AttrType{:generator}[], Attr = Attr{:generator}[]), Dict(:M=>(:Ob=>1)), Pair[])), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[I, J, K, L, M, IJK, JKL, KLM], Hom = Hom{:generator}[IJK_I, IJK_J, IJK_K, JKL_J, JKL_K, JKL_L, KLM_K, KLM_L, KLM_M], AttrType = AttrType{:generator}[IntAttr], Attr = Attr{:generator}[value_ijk, value_jkl, value_klm]), Dict(:KLM=>(:Ob=>8), :IJK_J=>(:Hom=>2), :IntAttr=>(:AttrType=>1), :JKL=>(:Ob=>7), :JKL_J=>(:Hom=>4), :IJK=>(:Ob=>6), :K=>(:Ob=>3), :KLM_L=>(:Hom=>8), :JKL_K=>(:Hom=>5), :M=>(:Ob=>5)…), Pair[])))), :J => Diagram{op}(FinFunctor(Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}(:J => J), Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}(), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[J], Hom = Hom{:generator}[], AttrType = AttrType{:generator}[], Attr = Attr{:generator}[]), Dict(:J=>(:Ob=>1)), Pair[])), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[I, J, K, L, M, IJK, JKL, KLM], Hom = Hom{:generator}[IJK_I, IJK_J, IJK_K, JKL_J, JKL_K, JKL_L, KLM_K, KLM_L, KLM_M], AttrType = AttrType{:generator}[IntAttr], Attr = Attr{:generator}[value_ijk, value_jkl, value_klm]), Dict(:KLM=>(:Ob=>8), :IJK_J=>(:Hom=>2), :IntAttr=>(:AttrType=>1), :JKL=>(:Ob=>7), :JKL_J=>(:Hom=>4), :IJK=>(:Ob=>6), :K=>(:Ob=>3), :KLM_L=>(:Hom=>8), :JKL_K=>(:Hom=>5), :M=>(:Ob=>5)…), Pair[])))), :K => Diagram{op}(FinFunctor(Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}(:K => K), Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}(), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[K], Hom = Hom{:generator}[], AttrType = AttrType{:generator}[], Attr = Attr{:generator}[]), Dict(:K=>(:Ob=>1)), Pair[])), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[I, J, K, L, M, IJK, JKL, KLM], Hom = Hom{:generator}[IJK_I, IJK_J, IJK_K, JKL_J, JKL_K, JKL_L, KLM_K, KLM_L, KLM_M], AttrType = AttrType{:generator}[IntAttr], Attr = Attr{:generator}[value_ijk, value_jkl, value_klm]), Dict(:KLM=>(:Ob=>8), :IJK_J=>(:Hom=>2), :IntAttr=>(:AttrType=>1), :JKL=>(:Ob=>7), :JKL_J=>(:Hom=>4), :IJK=>(:Ob=>6), :K=>(:Ob=>3), :KLM_L=>(:Hom=>8), :JKL_K=>(:Hom=>5), :M=>(:Ob=>5)…), Pair[])))), :L => Diagram{op}(FinFunctor(Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}(:L => L), Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}(), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[L], Hom = Hom{:generator}[], AttrType = AttrType{:generator}[], Attr = Attr{:generator}[]), Dict(:L=>(:Ob=>1)), Pair[])), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[I, J, K, L, M, IJK, JKL, KLM], Hom = Hom{:generator}[IJK_I, IJK_J, IJK_K, JKL_J, JKL_K, JKL_L, KLM_K, KLM_L, KLM_M], AttrType = AttrType{:generator}[IntAttr], Attr = Attr{:generator}[value_ijk, value_jkl, value_klm]), Dict(:KLM=>(:Ob=>8), :IJK_J=>(:Hom=>2), :IntAttr=>(:AttrType=>1), :JKL=>(:Ob=>7), :JKL_J=>(:Hom=>4), :IJK=>(:Ob=>6), :K=>(:Ob=>3), :KLM_L=>(:Hom=>8), :JKL_K=>(:Hom=>5), :M=>(:Ob=>5)…), Pair[]))))), Dict{Symbol, Catlab.CategoricalAlgebra.Diagrams.SimpleDiagramHom{GATlab.Stdlib.StdModels.op, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Any, Any}}, Catlab.CategoricalAlgebra.FinCats.FinTransformationMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Any, Any}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}}, Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:id}}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:generator}}}}}(:l => DiagramHom{op}([(l, id(L))], [], FinFunctor(Dict{Symbol, Ob{:generator}}(:l=>L, :m=>M, :klm=>KLM, :k=>K, :ijk=>IJK, :j=>J, :jkl=>JKL, :i=>I), Dict{Symbol, Hom{:generator}}(Symbol("##unnamedhom#9")=>KLM_M, Symbol("##unnamedhom#5")=>JKL_K, Symbol("##unnamedhom#1")=>IJK_I, Symbol("##unnamedhom#4")=>IJK_K, Symbol("##unnamedhom#3")=>JKL_J, Symbol("##unnamedhom#2")=>IJK_J, Symbol("##unnamedhom#6")=>KLM_K, Symbol("##unnamedhom#8")=>KLM_L, Symbol("##unnamedhom#7")=>JKL_L), …), FinFunctor(Dict{Symbol, Ob{:generator}}(:L=>L), Dict{Symbol, Union{Attr, AttrType, Hom}}(), …)), :m => DiagramHom{op}([(m, id(M))], [], FinFunctor(Dict{Symbol, Ob{:generator}}(:l=>L, :m=>M, :klm=>KLM, :k=>K, :ijk=>IJK, :j=>J, :jkl=>JKL, :i=>I), Dict{Symbol, Hom{:generator}}(Symbol("##unnamedhom#9")=>KLM_M, Symbol("##unnamedhom#5")=>JKL_K, Symbol("##unnamedhom#1")=>IJK_I, Symbol("##unnamedhom#4")=>IJK_K, Symbol("##unnamedhom#3")=>JKL_J, Symbol("##unnamedhom#2")=>IJK_J, Symbol("##unnamedhom#6")=>KLM_K, Symbol("##unnamedhom#8")=>KLM_L, Symbol("##unnamedhom#7")=>JKL_L), …), FinFunctor(Dict{Symbol, Ob{:generator}}(:M=>M), Dict{Symbol, Union{Attr, AttrType, Hom}}(), …)), :k => DiagramHom{op}([(k, id(K))], [], FinFunctor(Dict{Symbol, Ob{:generator}}(:l=>L, :m=>M, :klm=>KLM, :k=>K, :ijk=>IJK, :j=>J, :jkl=>JKL, :i=>I), Dict{Symbol, Hom{:generator}}(Symbol("##unnamedhom#9")=>KLM_M, Symbol("##unnamedhom#5")=>JKL_K, Symbol("##unnamedhom#1")=>IJK_I, Symbol("##unnamedhom#4")=>IJK_K, Symbol("##unnamedhom#3")=>JKL_J, Symbol("##unnamedhom#2")=>IJK_J, Symbol("##unnamedhom#6")=>KLM_K, Symbol("##unnamedhom#8")=>KLM_L, Symbol("##unnamedhom#7")=>JKL_L), …), FinFunctor(Dict{Symbol, Ob{:generator}}(:K=>K), Dict{Symbol, Union{Attr, AttrType, Hom}}(), …)), :j => DiagramHom{op}([(j, id(J))], [], FinFunctor(Dict{Symbol, Ob{:generator}}(:l=>L, :m=>M, :klm=>KLM, :k=>K, :ijk=>IJK, :j=>J, :jkl=>JKL, :i=>I), Dict{Symbol, Hom{:generator}}(Symbol("##unnamedhom#9")=>KLM_M, Symbol("##unnamedhom#5")=>JKL_K, Symbol("##unnamedhom#1")=>IJK_I, Symbol("##unnamedhom#4")=>IJK_K, Symbol("##unnamedhom#3")=>JKL_J, Symbol("##unnamedhom#2")=>IJK_J, Symbol("##unnamedhom#6")=>KLM_K, Symbol("##unnamedhom#8")=>KLM_L, Symbol("##unnamedhom#7")=>JKL_L), …), FinFunctor(Dict{Symbol, Ob{:generator}}(:J=>J), Dict{Symbol, Union{Attr, AttrType, Hom}}(), …)), :i => DiagramHom{op}([(i, id(I))], [], FinFunctor(Dict{Symbol, Ob{:generator}}(:l=>L, :m=>M, :klm=>KLM, :k=>K, :ijk=>IJK, :j=>J, :jkl=>JKL, :i=>I), Dict{Symbol, Hom{:generator}}(Symbol("##unnamedhom#9")=>KLM_M, Symbol("##unnamedhom#5")=>JKL_K, Symbol("##unnamedhom#1")=>IJK_I, Symbol("##unnamedhom#4")=>IJK_K, Symbol("##unnamedhom#3")=>JKL_J, Symbol("##unnamedhom#2")=>IJK_J, Symbol("##unnamedhom#6")=>KLM_K, Symbol("##unnamedhom#8")=>KLM_L, Symbol("##unnamedhom#7")=>JKL_L), …), FinFunctor(Dict{Symbol, Ob{:generator}}(:I=>I), Dict{Symbol, Union{Attr, AttrType, Hom}}(), …))), FinCat(Presentation{T, Symbol}(Catlab.Theories.FreeSchema, (Ob = Ob{:generator}[IJKLM, I, J, K, L, M], Hom = Hom{:generator}[i, j, k, l, m], AttrType = AttrType{:generator}[], Attr = Attr{:generator}[]), Dict(:j=>(:Hom=>2), :l=>(:Hom=>4), :IJKLM=>(:Ob=>1), :K=>(:Ob=>4), :M=>(:Ob=>6), :k=>(:Hom=>3), :m=>(:Hom=>5), :I=>(:Ob=>2), :J=>(:Ob=>3), :L=>(:Ob=>5)…), Pair[])), TypeCat(SimpleDiagram{GATlab.Stdlib.StdModels.op, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, D} where D<:(Functor{<:Category{Ob, Hom, Catlab.CategoricalAlgebra.FinCats.FinCatSize} where {Ob, Hom}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}}), Catlab.CategoricalAlgebra.Diagrams.SimpleDiagramHom{GATlab.Stdlib.StdModels.op, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Any, Any}}, Catlab.CategoricalAlgebra.FinCats.FinTransformationMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Any, Any}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Symbol, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}}, Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:id}}}, Catlab.CategoricalAlgebra.FinCats.FinDomFunctorMap{Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Catlab.CategoricalAlgebra.FinCats.FinCatPresentation{Catlab.Theories.ThSchema.Meta.T, Union{Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Ob}, Union{Catlab.Theories.FreeSchema.Attr, Catlab.Theories.FreeSchema.AttrType, Catlab.Theories.FreeSchema.Hom}}, Dict{Symbol, Catlab.Theories.FreeSchema.Ob{:generator}}, Dict{Symbol, Catlab.Theories.FreeSchema.Hom{:generator}}}})), Dict{Any, Union{}}())
 
 A diagram is itself a functor $D:J\rightarrow C$, where $J$ is (usually)
 a small category, and $D$ will point at some instance of the diagram in
@@ -519,7 +446,7 @@ F = functor(M)
 to_graphviz(F.ob_map[:IJKLM],node_labels=true)
 ```
 
-![](gams_files/figure-commonmark/cell-15-output-1.svg)
+![](gams_files/figure-commonmark/cell-14-output-1.svg)
 
 Because of the simplicity of the schema `IJKLMRelSch`, the contravariant
 morphisms of diagrams simply pick out the object in $D$ associated with
@@ -532,7 +459,7 @@ We run the data migration to move data from the schema `IJKLMSch` to
 has the same number of records as other methods.
 
 ``` julia
-ijklm_migrate_acset = migrate(IJKLMRelType, ijklm_dat, M)
+ijklm_migrate_acset = migrate(IJKLMRelType, ijklm_acs, M)
 nparts(ijklm_migrate_acset, :IJKLM) == size(ijklm_query,1)
 ```
 
@@ -544,21 +471,21 @@ Let’s look at the first few rows.
 pretty_tables(ijklm_migrate_acset, tables=[:IJKLM], max_num_of_rows=5)
 ```
 
-    ┌───────┬────┬────┬───┬────┬────┐
-    │ IJKLM │  i │  j │ k │  l │  m │
-    ├───────┼────┼────┼───┼────┼────┤
-    │     1 │ 80 │ 18 │ 3 │ 10 │  5 │
-    │     2 │ 80 │ 18 │ 3 │ 15 │ 19 │
-    │     3 │ 80 │ 18 │ 3 │ 15 │ 17 │
-    │     4 │ 82 │ 18 │ 3 │ 10 │  5 │
-    │     5 │ 82 │ 18 │ 3 │ 15 │ 19 │
-    └───────┴────┴────┴───┴────┴────┘
+    ┌───────┬────┬───┬───┬───┬────┐
+    │ IJKLM │  i │ j │ k │ l │  m │
+    ├───────┼────┼───┼───┼───┼────┤
+    │     1 │ 37 │ 3 │ 1 │ 3 │ 15 │
+    │     2 │ 37 │ 3 │ 1 │ 3 │ 19 │
+    │     3 │ 41 │ 3 │ 1 │ 3 │ 15 │
+    │     4 │ 41 │ 3 │ 1 │ 3 │ 19 │
+    │     5 │ 48 │ 3 │ 1 │ 3 │ 15 │
+    └───────┴────┴───┴───┴───┴────┘
 
 Once again, let’s benchmark:
 
 ``` julia
 @benchmark let
-    ijklm = migrate(IJKLMRelType, ijklm_dat, M)
+    ijklm = migrate(IJKLMRelType, ijklm_acs, M)
     model = JuMP.Model(HiGHS.Optimizer)
     set_silent(model)
     @variable(model, x[parts(ijklm,:IJKLM)] >= 0)
@@ -569,13 +496,13 @@ Once again, let’s benchmark:
 end
 ```
 
-    BenchmarkTools.Trial: 671 samples with 1 evaluation.
-     Range (min … max):  6.771 ms … 15.988 ms  ┊ GC (min … max): 0.00% … 45.44%
-     Time  (median):     6.955 ms              ┊ GC (median):    0.00%
-     Time  (mean ± σ):   7.454 ms ±  1.768 ms  ┊ GC (mean ± σ):  5.35% ± 10.39%
+    BenchmarkTools.Trial: 751 samples with 1 evaluation.
+     Range (min … max):  5.947 ms … 13.427 ms  ┊ GC (min … max): 0.00% … 42.78%
+     Time  (median):     6.188 ms              ┊ GC (median):    0.00%
+     Time  (mean ± σ):   6.658 ms ±  1.598 ms  ┊ GC (mean ± σ):  5.65% ± 10.66%
 
-      ▇█▄▃                                                        
-      ████▅▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▁▁▄▁▅▄▆▆▄▅▅▆▆▅▅▄▅▄▅ ▇
-      6.77 ms      Histogram: log(frequency) by time     14.6 ms <
+      ▃█▇▄                                                        
+      ████▇▇▅▅▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▁▄▄▅▅▅▅▇▆▅▄▅▄▅▅▅▆▅▅▅ ▇
+      5.95 ms      Histogram: log(frequency) by time       13 ms <
 
-     Memory estimate: 8.89 MiB, allocs estimate: 58735.
+     Memory estimate: 8.87 MiB, allocs estimate: 59207.

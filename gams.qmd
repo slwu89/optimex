@@ -62,21 +62,22 @@ M = ["m$x" for x in 1:m]
 IJK = DataFrame(Iterators.product(I,J,K))
 rename!(IJK, [:i,:j,:k])
 IJK.value = SampleBinomialVec(I,J,K)
+filter!(:value => v -> v != 0, IJK)
+select!(IJK, Not(:value))
 
 # make JKL
 JKL = DataFrame(Iterators.product(J,K,L))
 rename!(JKL, [:j,:k,:l])
 JKL.value = SampleBinomialVec(J,K,L)
+filter!(:value => v -> v != 0, JKL)
+select!(JKL, Not(:value))
 
 # make KLM
 KLM = DataFrame(Iterators.product(K,L,M))
 rename!(KLM, [:k,:l,:m])
 KLM.value = SampleBinomialVec(K,L,M)
-
-# make the products just general sparse relations
-IJK_sparse = [(x.i, x.j, x.k) for x in eachrow(IJK) if x.value == true]
-JKL_sparse = [(x.j, x.k, x.l) for x in eachrow(JKL) if x.value == true]
-KLM_sparse = [(x.k, x.l, x.m) for x in eachrow(KLM) if x.value == true]
+filter!(:value => v -> v != 0, KLM)
+select!(KLM, Not(:value))
 ```
 
 ## The "intuitive" formulation
@@ -87,9 +88,9 @@ As we know this is the slow one.
 @benchmark let 
     x_list = [
         (i, j, k, l, m)
-        for (i, j, k) in IJK_sparse
-        for (jj, kk, l) in JKL_sparse if jj == j && kk == k
-        for (kkk, ll, m) in KLM_sparse if kkk == k && ll == l
+        for (i, j, k) in eachrow(IJK)
+        for (jj, kk, l) in eachrow(JKL) if jj == j && kk == k
+        for (kkk, ll, m) in eachrow(KLM) if kkk == k && ll == l
     ]
     model = JuMP.Model(HiGHS.Optimizer)
     set_silent(model)
@@ -108,29 +109,16 @@ end
 This is the fast DataFrames.jl based solution at JuMP blog link.
 
 ```{julia}
-IJK_sparse_df = filter(x -> x.value == 1, IJK)
-select!(IJK_sparse_df, Not(:value))
-
-JKL_sparse_df = filter(x -> x.value == 1, JKL)
-select!(JKL_sparse_df, Not(:value))
-
-KLM_sparse_df = filter(x -> x.value == 1, KLM)
-select!(KLM_sparse_df, Not(:value))
-
 ijklm_df = DataFrames.innerjoin(
-    DataFrames.innerjoin(IJK_sparse_df, JKL_sparse_df; on = [:j, :k]),
-    KLM_sparse_df;
+    DataFrames.innerjoin(IJK, JKL; on = [:j, :k]),
+    KLM;
     on = [:k, :l],
 )
-```
 
-Let's benchmark it.
-
-```{julia}
 @benchmark let
     ijklm = DataFrames.innerjoin(
-        DataFrames.innerjoin(IJK_sparse_df, JKL_sparse_df; on = [:j, :k]),
-        KLM_sparse_df;
+        DataFrames.innerjoin(IJK, JKL; on = [:j, :k]),
+        KLM;
         on = [:k, :l],
     )
     model = JuMP.Model(HiGHS.Optimizer)
@@ -143,7 +131,7 @@ Let's benchmark it.
 end
 ```
 
-## The acsets version
+## The Acsets version
 
 Acsets (Attributed C-Sets) are a nifty data structure coming from applied category theory, but its not too far off to think of them just as in-memory relational databases. They are provided in the [ACSets.jl](https://github.com/AlgebraicJulia/ACSets.jl) library, and imported and extended with machinery from applied category theory in [Catlab.jl](https://github.com/AlgebraicJulia/Catlab.jl). One of the advantages of using acsets and categorical machinery in general is that they have a natural graphical presentation, which in many cases is very readable and illuminating. To learn more about this data structure and many more topics, you can consult the package documentation and also you can begin with some [introductory articles on the AlgebraicJulia blog](https://blog.algebraicjulia.org/post/2020/09/cset-graphs-1/).
 
@@ -161,97 +149,43 @@ We use `@present` to make a schema for the acset which will store the data. Note
     KLM_K::Hom(KLM,K)
     KLM_L::Hom(KLM,L)
     KLM_M::Hom(KLM,M)
-    IntAttr::AttrType
-    value_ijk::Attr(IJK,IntAttr)
-    value_jkl::Attr(JKL,IntAttr)
-    value_klm::Attr(KLM,IntAttr)
 end
 
 Catlab.to_graphviz(IJKLMSch, graph_attrs=Dict(:dpi=>"72",:ratio=>"expand",:size=>"8"))
 ```
 
-Now we programatically generate the data type (and functions to work with it) for our schema, and fill it with data. The code is verbose, but we're storing all the sets and relations in a single data structure.
+Now we programatically generate the data type (and functions to work with it) for our schema, and fill it with data.
 
 ```{julia}
+#| output: false
+#| 
 @acset_type IJKLMData(IJKLMSch, index=[:IJK_I,:IJK_J,:IJK_K,:JKL_J,:JKL_K,:JKL_L,:KLM_K,:KLM_L,:KLM_M])
 
-# the basic sets
-I = collect(1:n)
-J = collect(1:m)
-K = collect(1:m)
-L = collect(1:m)
-M = collect(1:m)
+ijklm_acs = @acset IJKLMData begin
+    I = n
+    J = m
+    K = m
+    L = m
+    M = m
 
-# make the data
-ijklm_dat = IJKLMData{Int}()
+    IJK = nrow(IJK)
+    IJK_I = [parse(Int, i[2:end]) for i in IJK.i]
+    IJK_J = [parse(Int, j[2:end]) for j in IJK.j]
+    IJK_K = [parse(Int, k[2:end]) for k in IJK.k]
 
-add_parts!(ijklm_dat, :I, length(I))
-add_parts!(ijklm_dat, :J, length(J))
-add_parts!(ijklm_dat, :K, length(K))
-add_parts!(ijklm_dat, :L, length(L))
-add_parts!(ijklm_dat, :M, length(M))
+    JKL = nrow(JKL)
+    JKL_J = [parse(Int, j[2:end]) for j in JKL.j]
+    JKL_K = [parse(Int, k[2:end]) for k in JKL.k]
+    JKL_L = [parse(Int, l[2:end]) for l in JKL.l]
 
-# add the relations...first as product...then sparsify
-
-# IJK
-ijk_prod = Iterators.product(I,J,K)
-
-add_parts!(
-    ijklm_dat, 
-    :IJK,
-    length(ijk_prod),
-    IJK_I=vec([e[1] for e in ijk_prod]),
-    IJK_J=vec([e[2] for e in ijk_prod]),
-    IJK_K=vec([e[3] for e in ijk_prod]),
-    value_ijk=IJK.value
-)
-
-rem_parts!(
-    ijklm_dat, 
-    :IJK, 
-    findall(ijklm_dat[:,:value_ijk] .== 0)
-)
-
-# JKL
-jkl_prod = Iterators.product(J,K,L)
-
-add_parts!(
-    ijklm_dat, 
-    :JKL,
-    length(jkl_prod),
-    JKL_J=vec([e[1] for e in jkl_prod]),
-    JKL_K=vec([e[2] for e in jkl_prod]),
-    JKL_L=vec([e[3] for e in jkl_prod]),
-    value_jkl=JKL.value
-)
-
-rem_parts!(
-    ijklm_dat, 
-    :JKL, 
-    findall(ijklm_dat[:,:value_jkl] .== 0)
-)
-
-# KLM
-klm_prod = Iterators.product(K,L,M)
-
-add_parts!(
-    ijklm_dat, 
-    :KLM,
-    length(klm_prod),
-    KLM_K=vec([e[1] for e in klm_prod]),
-    KLM_L=vec([e[2] for e in klm_prod]),
-    KLM_M=vec([e[3] for e in klm_prod]),
-    value_klm=KLM.value
-)
-
-rem_parts!(
-    ijklm_dat, 
-    :KLM, 
-    findall(ijklm_dat[:,:value_klm] .== 0)
-)
+    KLM = nrow(KLM)
+    KLM_K = [parse(Int, k[2:end]) for k in KLM.k]
+    KLM_L = [parse(Int, l[2:end]) for l in KLM.l]
+    KLM_M = [parse(Int, m[2:end]) for m in KLM.m]
+end;
 ```
 
-### conjunctive queries on acsets
+### Conjunctive Queries on Acsets
 
 Now, the critical thing that the JuMP devs did to speed thing up was to replace the for loops with 2 inner joins, to get the "paths" through the relations. How to do this with acsets? Well one thing we can do is execute a conjunctive query on the acset to get the same thing. This is described in a [post at the AlgebraicJulia blog](https://blog.algebraicjulia.org/post/2020/12/cset-conjunctive-queries/).
 
@@ -272,7 +206,7 @@ The JuMP blog post notes that while the data frames version doesn't resemble the
 The query is evaluated on the acset by computing its limit, which is a kind of generalization of meet. We can confirm that both the acsets and data frame methods return the same number of rows, and look at the output.
 
 ```{julia}
-ijklm_query = query(ijklm_dat, connected_paths_query)
+ijklm_query = query(ijklm_acs, connected_paths_query)
 size(ijklm_query) == size(ijklm_df)
 ```
 
@@ -284,7 +218,7 @@ Now that we know they are equal, we can go ahead and see how fast the acsets ver
 
 ```{julia}
 @benchmark let
-    ijklm = query(ijklm_dat, connected_paths_query)
+    ijklm = query(ijklm_acs, connected_paths_query)
     model = JuMP.Model(HiGHS.Optimizer)
     set_silent(model)
     ijklm[!, :x] = @variable(model, x[1:size(ijklm, 1)] >= 0)
@@ -295,7 +229,7 @@ Now that we know they are equal, we can go ahead and see how fast the acsets ver
 end
 ```
 
-### data migrations of acsets
+### Data Migrations between Acsets
 
 While the query execution in the previous section is already quite useful for practical application, it does have one downside, and that is the type of the return object is a `DataFrame`. While this is appropriate for many cases, one of the benefits of acsets is that, from one point of view, they are in-memory relational databases, and are therefore capable of representing data that is not possible to do with a single table. Therefore, it would be nice if one could execute a _data migration_ from one type of acset, where "type" means the schema, to another, that is able to carry along further data we need. For more details on contravariant data migration, please see Evan Patterson's Topos Institute colloquium presentation ["Categories of diagrams in data migration and computational physics"](https://www.youtube.com/live/Ra-PLnog_M0?si=1_ex4wLud2hSR7be).
 
@@ -368,7 +302,7 @@ Because of the simplicity of the schema `IJKLMRelSch`, the contravariant morphis
 We run the data migration to move data from the schema `IJKLMSch` to `IJKLMRelSch` using the function `migrate`, and check that the result has the same number of records as other methods.
 
 ```{julia}
-ijklm_migrate_acset = migrate(IJKLMRelType, ijklm_dat, M)
+ijklm_migrate_acset = migrate(IJKLMRelType, ijklm_acs, M)
 nparts(ijklm_migrate_acset, :IJKLM) == size(ijklm_query,1)
 ```
 
@@ -382,7 +316,7 @@ Once again, let's benchmark:
 
 ```{julia}
 @benchmark let
-    ijklm = migrate(IJKLMRelType, ijklm_dat, M)
+    ijklm = migrate(IJKLMRelType, ijklm_acs, M)
     model = JuMP.Model(HiGHS.Optimizer)
     set_silent(model)
     @variable(model, x[parts(ijklm,:IJKLM)] >= 0)
