@@ -133,6 +133,10 @@ Catlab.to_graphviz(IJKLMSch, graph_attrs=Dict(:dpi=>"72",:ratio=>"expand",:size=
 
 @acset_type IJKLMData(IJKLMSch, index=[:IJK_I,:IJK_J,:IJK_K,:JKL_J,:JKL_K,:JKL_L,:KLM_K,:KLM_L,:KLM_M])
 
+make_acset2 = function(I,J,K,L,M,IJK,JKL,KLM)
+    
+end
+
 make_acset = function(I,J,K,L,M,IJK,JKL,KLM)
     ijklm_dat = IJKLMData{Int}()
 

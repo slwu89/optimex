@@ -1,18 +1,18 @@
 ---
 title: "IJKLM model"
 author: "Sean L. Wu"
-date: "11/13/2023"
+date: "9/5/2024"
 format: gfm
-jupyter: julia-1.9
+jupyter: julia-1.10
 ---
 
 ## The IJKLM model
 
 An (in)famous [Julia Discourse thread](https://discourse.julialang.org/t/performance-julia-jump-vs-python-pyomo/92044) once asked how to make model building in JuMP faster compared to other platforms (Pyomo, and I guess GAMS). This turned into a [blog post by GAMS](https://www.gams.com/blog/2023/07/performance-in-optimization-models-a-comparative-analysis-of-gams-pyomo-gurobipy-and-jump/), a company which produces a modeling language that plugs into various commercial and open source solvers. The original formulation of the JuMP model showed very bad performance, but that was due to the way the author (employee of GAMS) was using Julia, rather than anything JuMP specific. The JuMP dev team responded with their own [blog post on the JuMP website](https://jump.dev/2023/07/20/gams-blog/), which was announced on a [Discourse thread](https://discourse.julialang.org/t/jump-developers-response-to-benchmarks-by-gams/101920). They used a DataFrames.jl based solution that was very fast. 
 
-The backstory is filled with intrigue, no doubt, but I'm interested to see if acsets can provide an alterative way to generate this model. The original data is reproducible at [justine18/performance_experiment](https://github.com/justine18/performance_experiment), but I decided to just redo it in Julia as the writing/reading to/from JSON files is a pain in the butt.
+I'm interested to see if acsets can provide an alterative way to generate this model. The original data is reproducible at [justine18/performance_experiment](https://github.com/justine18/performance_experiment). I replicated the Python data generation code in Julia.
 
-By the way, the model is given as:
+The model is given as:
 
 $$\text{min} \ z = 1$$
 
@@ -20,7 +20,7 @@ $$\sum_{(j,k):(i,j,k) \in \mathcal{IJK}} \ \sum_{l:(j,k,l) \in \mathcal{JKL}} \ 
 
 $$x_{i,j,k,l,m} \ge 0 \hspace{1cm} \forall \ (i,j,k) \in \mathcal{IJK}, l:(j,k,l) \in \mathcal{JKL}, m:(k,l,m) \in \mathcal{KLM} $$
 
-The blog post calls subsets of Cartesian products "maps", which seems to be confused as a "map" is generally understood to be a function in math. General subsets of products are known as "relations".
+The GAMS blog post calls subsets of Cartesian products "maps", which seems to be confused as a "map" is generally understood to be a function in math. General subsets of products are known as "relations".
 
 ## Data generation
 
@@ -105,7 +105,7 @@ end
 
 ## The DataFrames version
 
-The fast one at the JuMP blog link.
+This is the fast DataFrames.jl based solution at JuMP blog link.
 
 ```{julia}
 IJK_sparse_df = filter(x -> x.value == 1, IJK)
@@ -353,7 +353,7 @@ M = @migration IJKLMRelSch IJKLMSch begin
     k => k
     l => l
     m => m
-end
+end;
 ```
 
 A diagram is itself a functor $D:J\rightarrow C$, where $J$ is (usually) a small category, and $D$ will point at some instance of the diagram in $C$. We can plot what the largest diagram looks like, that which object `IJKLM` in $D$ is mapped to. Note the similarity to the conjunctive query visualized as a UWD previously. In particular, note that "relation" elements must agree upon the relevant "set" elements via their morphisms. The object in $C$ that each object in $J$ corresponds to is given by the text after the colon in the relevant node.

@@ -122,16 +122,16 @@ As we know this is the slow one.
 end
 ```
 
-    BenchmarkTools.Trial: 167 samples with 1 evaluation.
-     Range (min … max):  27.004 ms … 35.219 ms  ┊ GC (min … max):  7.59% … 14.08%
-     Time  (median):     29.646 ms              ┊ GC (median):    13.17%
-     Time  (mean ± σ):   29.978 ms ±  1.554 ms  ┊ GC (mean ± σ):  12.29% ±  2.25%
+    BenchmarkTools.Trial: 172 samples with 1 evaluation.
+     Range (min … max):  24.505 ms … 231.182 ms  ┊ GC (min … max): 0.00% … 87.80%
+     Time  (median):     27.174 ms               ┊ GC (median):    0.00%
+     Time  (mean ± σ):   29.098 ms ±  15.692 ms  ┊ GC (mean ± σ):  9.31% ±  9.35%
 
-                     █▃   ▃                                        
-      ▅▁▄▆▃▃▅▁▁▄▃▄▃▅███▄▆▆█▆▇▃▆▃█▄▇▆▆▅▄▆▇▆▃▄▄▃▅▃▆▅▃▃▁▃▄▁▃▃▃▁▁▃▁▁▃ ▃
-      27 ms           Histogram: frequency by time          34 ms <
+      ▆   ▃▁▆██ ▄▄▄▃ ▁▄       ▃    ▁   ▁ ▃▃  ▁     ▁      ▁         
+      █▇▇▄█████▇████▇██▄▇▁▆▄▇▁█▁▄▆▄█▇▆▆█▇██▇▆█▁▆▇▁▁█▆▇▆▁▄▄█▄▄▆▄▁▄▄ ▄
+      24.5 ms         Histogram: frequency by time         33.3 ms <
 
-     Memory estimate: 79.13 MiB, allocs estimate: 1679535.
+     Memory estimate: 31.87 MiB, allocs estimate: 644032.
 
 ## The DataFrames version
 
@@ -173,16 +173,16 @@ Let’s benchmark it.
 end
 ```
 
-    BenchmarkTools.Trial: 1105 samples with 1 evaluation.
-     Range (min … max):  4.009 ms … 10.604 ms  ┊ GC (min … max): 0.00% … 39.24%
-     Time  (median):     4.197 ms              ┊ GC (median):    0.00%
-     Time  (mean ± σ):   4.521 ms ±  1.120 ms  ┊ GC (mean ± σ):  4.92% ±  9.81%
+    BenchmarkTools.Trial: 832 samples with 1 evaluation.
+     Range (min … max):  4.864 ms … 227.252 ms  ┊ GC (min … max): 0.00% … 90.82%
+     Time  (median):     5.169 ms               ┊ GC (median):    0.00%
+     Time  (mean ± σ):   6.009 ms ±   7.984 ms  ┊ GC (mean ± σ):  7.46% ±  8.65%
 
-      ▅█▆▅▄▃▂▁                                                    
-      ████████▆▅▁▁▁▁▁▁▁▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▆▅▆▆██▆▇▆▅ █
-      4.01 ms      Histogram: log(frequency) by time     9.11 ms <
+      █▃                                                           
+      ██▆▆▅▃▃▃▃▃▃▂▂▂▂▁▂▂▂▁▁▂▁▁▁▂▁▁▁▂▁▁▁▁▂▁▁▁▁▁▁▂▁▂▂▂▂▂▁▂▂▁▁▂▁▂▂▁▂ ▂
+      4.86 ms         Histogram: frequency by time          16 ms <
 
-     Memory estimate: 2.73 MiB, allocs estimate: 23833.
+     Memory estimate: 3.29 MiB, allocs estimate: 32791.
 
 ## The acsets version
 
@@ -372,11 +372,11 @@ ijklm_query[1:5,:] |> markdown_table
 
 | i   | j   | k   | l   | m   |
 |-----|-----|-----|-----|-----|
-| 73  | 10  | 16  | 16  | 11  |
-| 97  | 15  | 15  | 14  | 13  |
-| 97  | 15  | 15  | 12  | 1   |
-| 69  | 19  | 3   | 10  | 15  |
-| 69  | 19  | 3   | 20  | 4   |
+| 80  | 18  | 3   | 10  | 5   |
+| 80  | 18  | 3   | 15  | 19  |
+| 80  | 18  | 3   | 15  | 17  |
+| 82  | 18  | 3   | 10  | 5   |
+| 82  | 18  | 3   | 15  | 19  |
 
 Now that we know they are equal, we can go ahead and see how fast the
 acsets version is. The fact that the acsets based query is right on the
@@ -399,16 +399,16 @@ via foreign keys).
 end
 ```
 
-    BenchmarkTools.Trial: 1024 samples with 1 evaluation.
-     Range (min … max):  4.359 ms … 10.520 ms  ┊ GC (min … max): 0.00% … 38.41%
-     Time  (median):     4.482 ms              ┊ GC (median):    0.00%
-     Time  (mean ± σ):   4.881 ms ±  1.223 ms  ┊ GC (mean ± σ):  5.71% ± 10.57%
+    BenchmarkTools.Trial: 823 samples with 1 evaluation.
+     Range (min … max):  5.298 ms … 247.162 ms  ┊ GC (min … max): 0.00% … 90.30%
+     Time  (median):     5.500 ms               ┊ GC (median):    0.00%
+     Time  (mean ± σ):   6.074 ms ±   8.580 ms  ┊ GC (mean ± σ):  7.71% ±  8.25%
 
-      ▆█▄▂▂▂                                                      
-      ███████▆▄▆▄▅▅▄▄▄▁▄▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▄▇█▆▇█▇▇▆▄ ▇
-      4.36 ms      Histogram: log(frequency) by time     9.34 ms <
+      ▆█▄                                                          
+      ████▆▄▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▄▁▁▁▆▄▆ ▇
+      5.3 ms       Histogram: log(frequency) by time      15.2 ms <
 
-     Memory estimate: 3.47 MiB, allocs estimate: 30406.
+     Memory estimate: 4.21 MiB, allocs estimate: 39290.
 
 ### data migrations of acsets
 
@@ -544,15 +544,15 @@ Let’s look at the first few rows.
 pretty_tables(ijklm_migrate_acset, tables=[:IJKLM], max_num_of_rows=5)
 ```
 
-    ┌───────┬────┬────┬────┬────┬────┐
-    │ IJKLM │  i │  j │  k │  l │  m │
-    ├───────┼────┼────┼────┼────┼────┤
-    │     1 │ 73 │ 10 │ 16 │ 16 │ 11 │
-    │     2 │ 97 │ 15 │ 15 │ 14 │ 13 │
-    │     3 │ 97 │ 15 │ 15 │ 12 │  1 │
-    │     4 │ 69 │ 19 │  3 │ 10 │ 15 │
-    │     5 │ 69 │ 19 │  3 │ 20 │  4 │
-    └───────┴────┴────┴────┴────┴────┘
+    ┌───────┬────┬────┬───┬────┬────┐
+    │ IJKLM │  i │  j │ k │  l │  m │
+    ├───────┼────┼────┼───┼────┼────┤
+    │     1 │ 80 │ 18 │ 3 │ 10 │  5 │
+    │     2 │ 80 │ 18 │ 3 │ 15 │ 19 │
+    │     3 │ 80 │ 18 │ 3 │ 15 │ 17 │
+    │     4 │ 82 │ 18 │ 3 │ 10 │  5 │
+    │     5 │ 82 │ 18 │ 3 │ 15 │ 19 │
+    └───────┴────┴────┴───┴────┴────┘
 
 Once again, let’s benchmark:
 
@@ -569,13 +569,13 @@ Once again, let’s benchmark:
 end
 ```
 
-    BenchmarkTools.Trial: 514 samples with 1 evaluation.
-     Range (min … max):  8.592 ms … 21.361 ms  ┊ GC (min … max): 0.00% … 22.67%
-     Time  (median):     8.991 ms              ┊ GC (median):    0.00%
-     Time  (mean ± σ):   9.723 ms ±  1.594 ms  ┊ GC (mean ± σ):  6.39% ±  9.62%
+    BenchmarkTools.Trial: 671 samples with 1 evaluation.
+     Range (min … max):  6.771 ms … 15.988 ms  ┊ GC (min … max): 0.00% … 45.44%
+     Time  (median):     6.955 ms              ┊ GC (median):    0.00%
+     Time  (mean ± σ):   7.454 ms ±  1.768 ms  ┊ GC (mean ± σ):  5.35% ± 10.39%
 
-      ██▅▅▅▆▃▁▂▁                           ▂▄▃ ▁                  
-      ███████████▇▁▆▄▇█▁▄▅▅▄▁▁▁▇▁▁▁▄▁▄▁▁▄▆▇████████▅▄▁▁▆▁▁▄▄▁▄▁▄ █
-      8.59 ms      Histogram: log(frequency) by time     13.8 ms <
+      ▇█▄▃                                                        
+      ████▅▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▄▁▁▄▁▅▄▆▆▄▅▅▆▆▅▅▄▅▄▅ ▇
+      6.77 ms      Histogram: log(frequency) by time     14.6 ms <
 
-     Memory estimate: 9.34 MiB, allocs estimate: 66729.
+     Memory estimate: 8.89 MiB, allocs estimate: 58735.
