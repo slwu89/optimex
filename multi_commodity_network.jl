@@ -1,4 +1,5 @@
 using Catlab
+import Catlab.Graphics.Graphviz.Html
 using JuMP
 using DataFrames
 import HiGHS
@@ -51,9 +52,9 @@ to_graphviz(SchMultiCommodity, graph_attrs=Dict(:size=>"6",:ratio=>"fill"))
 
 @acset_type MultiCommodity(SchMultiCommodity, index=[:src,:tgt,:pv_p,:pv_v,:s_p,:s_e]) <: AbstractMultiCommodity
 
-places = unique([df_shipping.origin; df_shipping.destination])
-product = unique(df_shipping.product)
-df_edges=unique(df_shipping[:, [:origin, :destination]])
+places = unique([df_cost.origin; df_cost.destination])
+product = unique(df_cost.product)
+df_edges=unique(df_cost[:, [:origin, :destination]])
 transform!(df_edges, :origin => ByRow(o -> begin
     findfirst(o .== places)
 end) => :src)
@@ -99,3 +100,61 @@ for r in eachrow(df_cost)
         shipcost=r.flow_cost
     )
 end
+
+function make_property_graph(g::T; kwargs...) where {T<:AbstractMultiCommodity}
+    pg = to_graphviz_property_graph(g; kwargs...)   
+    label_dict = Dict("milk"=>"🥛", "kiwifruit"=>"🥝")
+    for v in parts(g, :V)
+        prodv = incident(g, v, :pv_v)
+        label = Vector{String}()
+        push!(
+            label, """
+                <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+                <TR><TD COLSPAN="4">$(uppercasefirst(g[v, :vlabel]))</TD></TR>
+                <TR><TD>Product</TD><TD>Supply Capacity</TD><TD>Demand</TD><TD>Purchase Cost</TD></TR>
+            """
+        )
+        for pv in prodv
+            emoji = label_dict[g[pv, (:pv_p, :plabel)]]
+            push!(
+                label, """
+                    <TR><TD>$(emoji)</TD><TD>$(g[pv, :supplycap])</TD><TD>$(g[pv, :demand])</TD><TD>$(g[pv, :purcost])</TD></TR>
+                """
+            )
+        end
+        push!(
+            label, """
+                </TABLE>
+            """
+        )
+        set_vprops!(pg, v, label=Html(join(label)), shape="plain")
+    end
+    
+    for e in parts(g, :E)
+        ship = incident(g, e, :s_e)
+        label = Vector{String}()
+        push!(
+            label, """
+                <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
+                <TR><TD>Product</TD><TD>Shipping Cost</TD></TR>
+            """
+        )
+        for s in ship
+            emoji = label_dict[g[s, (:s_p, :plabel)]]
+            push!(
+                label, """
+                    <TR><TD>$(emoji)</TD><TD>$(g[s, :shipcost])</TD></TR>
+                """
+            )
+        end
+        push!(
+            label, """
+                </TABLE>
+            """
+        )
+        set_eprops!(pg, e, label=Html(join(label)), shape="plain")
+    end
+    return pg
+end
+
+to_graphviz(make_property_graph(multinet, graph_attrs=Dict(:rankdir=>"TD")))
