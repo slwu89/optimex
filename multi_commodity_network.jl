@@ -53,11 +53,11 @@ to_graphviz(SchMultiCommodity, graph_attrs=Dict(:size=>"6",:ratio=>"fill"))
 
 places = unique([df_shipping.origin; df_shipping.destination])
 product = unique(df_shipping.product)
-edges=unique(df_shipping[:, [:origin, :destination]])
-transform!(edges, :origin => ByRow(o -> begin
+df_edges=unique(df_shipping[:, [:origin, :destination]])
+transform!(df_edges, :origin => ByRow(o -> begin
     findfirst(o .== places)
 end) => :src)
-transform!(edges, :destination => ByRow(o -> begin
+transform!(df_edges, :destination => ByRow(o -> begin
     findfirst(o .== places)
 end) => :tgt)
 
@@ -68,23 +68,34 @@ multinet = @acset MultiCommodity{String,Float64,JuMP.VariableRef} begin
     vlabel=places
     Product=length(product)
     plabel=product
-    E=nrow(edges)
-    src=edges.src
-    tgt=edges.tgt
-    ux=capacity
+    E=nrow(df_edges)
+    src=df_edges.src
+    tgt=df_edges.tgt
+    flowcap=capacity
 end
 
-# add Product X Vertex
-for (v,p) in Iterators.product(places,product)
-    supply_ix = findfirst(df_supply.origin .== v .&& df_supply.product .== p)
-    us = if !isnothing(supply_ix)
-        df_supply[supply_ix, :capacity]
-    else
-        0.0
-    end
+df_prodvertex = outerjoin(df_supply, df_demand, on=[:origin=>:destination, :product])
+replace!(df_prodvertex.capacity, missing=>0.0)
+replace!(df_prodvertex.cost, missing=>0.0)
+replace!(df_prodvertex.demand, missing=>0.0)
+
+for r in eachrow(df_prodvertex)
+    v=only(incident(multinet, r.origin, :vlabel))
+    p=only(incident(multinet, r.product, :plabel))
     add_part!(
         multinet, :ProdVertex, 
-        pv_v=only(incident(multinet, v, :vlabel)), 
-        pv_p=only(incident(multinet, p, :plabel))
+        pv_v=v, pv_p=p,
+        supplycap=r.capacity, demand=r.demand, purcost=r.cost
+    )
+end
+
+for r in eachrow(df_cost)
+    src=only(incident(multinet, r.origin, :vlabel))
+    tgt=only(incident(multinet, r.destination, :vlabel))
+    product=only(incident(multinet, r.product, :plabel))
+    add_part!(
+        multinet, :Shipping,
+        s_p=product, s_e=only(edges(multinet, src, tgt)),
+        shipcost=r.flow_cost
     )
 end
