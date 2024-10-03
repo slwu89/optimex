@@ -112,7 +112,7 @@ end
 """
 Make a node label for the model parameters.
 """
-function make_node_label_structure(v, acs, label_dict)
+function make_node_label_parameters(v, acs, label_dict)
     prodv = incident(acs, v, :pv_v)
     label = Vector{String}()
     push!(
@@ -137,7 +137,7 @@ function make_node_label_structure(v, acs, label_dict)
     )
 end
 
-make_node_label_dict = Dict(:optim=>make_node_label_optim, :struct=>make_node_label_structure)
+make_node_label_dict = Dict(:optim=>make_node_label_optim, :parameters=>make_node_label_parameters)
 
 """
 Make an edge label for an optmized model.
@@ -173,7 +173,7 @@ end
 """
 Make an edge label for the parameters of the model.
 """
-function make_edge_label_structure(e, acs, label_dict)
+function make_edge_label_parameters(e, acs, label_dict)
     ship = incident(acs, e, :s_e)
     label = Vector{String}()
     edge_label = acs[e, (:s_e, :src, :vlabel)] * " → " * acs[e, (:s_e, :tgt, :vlabel)]
@@ -199,7 +199,7 @@ function make_edge_label_structure(e, acs, label_dict)
     )
 end
 
-make_edge_label_dict = Dict(:optim=>make_edge_label_optim,:struct=>make_edge_label_structure)
+make_edge_label_dict = Dict(:optim=>make_edge_label_optim,:parameters=>make_edge_label_parameters)
 
 function make_property_graph(acs::T; labels, kwargs...) where {T<:AbstractMultiCommodity}
     pg = to_graphviz_property_graph(acs; kwargs...)   
@@ -251,7 +251,7 @@ for r in eachrow(df_cost)
     )
 end
 
-to_graphviz(make_property_graph(multinet_, labels=:struct, graph_attrs=Dict(:rankdir=>"TD")))
+to_graphviz(make_property_graph(multinet_, labels=:parameters, graph_attrs=Dict(:rankdir=>"TD")))
 
 
 # --------------------------------------------------------------------------------
@@ -349,7 +349,37 @@ format_output(multinet1)
 
 
 # --------------------------------------------------------------------------------
-# once more, with feeling
+# once more, with queries
+
+inbound_uwd = @relation (v=place, v_id=v_id, p=prod, p_id=p_id, x=x) begin
+    ProdVertex(_id=pv_id, pv_p=p_id, pv_v=v_id)
+    Product(_id=p_id, plabel=prod)
+    V(_id=v_id, vlabel=place)
+    E(_id=e_id, tgt=v_id)
+    Shipping(_id=ship_id, s_e=e_id, s_p=p_id, x=x)
+end
+
+outbound_uwd = @relation (v=place, v_id=v_id, p=prod, p_id=p_id, x=x) begin
+    ProdVertex(_id=pv_id, pv_p=p_id, pv_v=v_id)
+    Product(_id=p_id, plabel=prod)
+    V(_id=v_id, vlabel=place)
+    E(_id=e_id, src=v_id)
+    Shipping(_id=ship_id, s_e=e_id, s_p=p_id, x=x)
+end
+
+function add_conservation_constraint_query!(acs, model, inbound_arcs, outbound_arcs)
+    for i in parts(acs, :ProdVertex)
+        v = acs[i, :pv_v]
+        p = acs[i, :pv_p]
+        # due to https://github.com/AlgebraicJulia/Catlab.jl/issues/939 we cannot use part IDs as parameters
+        inbound = sum(filter([:v_id, :p_id] => (v_id, p_id) -> v_id==v && p_id==p, inbound_arcs).x, init=zero(JuMP.VariableRef))
+        outbound = sum(filter([:v_id, :p_id] => (v_id, p_id) -> v_id==v && p_id==p, outbound_arcs).x, init=zero(JuMP.VariableRef))
+        @constraint(
+            model,
+            acs[i, :s] + inbound - outbound == acs[i, :demand]
+        )
+    end
+end
 
 multinet2 = deepcopy(multinet_)
 
@@ -358,31 +388,15 @@ model = JuMP.Model(HiGHS.Optimizer)
 add_variables!(multinet2, model)
 add_flow_constraint!(multinet2, model)
 
-inbound_uwd = @relation (pv=pv_id, v=place, p=prod, x=x) begin
-    ProdVertex(_id=pv_id, pv_p=p_id, pv_v=v_id)
-    Product(_id=p_id, plabel=prod)
-    V(_id=v_id, vlabel=place)
-    E(_id=e_id, tgt=v_id)
-    Shipping(_id=ship_id, s_e=e_id, s_p=p_id, x=x)
-end
+inbound_arcs = query(multinet2, inbound_uwd)
+outbound_arcs = query(multinet2, outbound_uwd)
+add_conservation_constraint_query!(multinet2, model, inbound_arcs, outbound_arcs)
+add_objective!(multinet2, model)
 
-query(multinet2, inbound_uwd)
-query(multinet2, inbound_uwd, (place="auckland", ))
+optimize!(model)
+solution_summary(model)
 
-for i in parts(acs, :ProdVertex)
-    v = acs[i, :pv_v]
-    p = acs[i, :pv_p]
+multinet2[:, :x] = value.(multinet2[:, :x])
+multinet2[:, :s] = value.(multinet2[:, :s])
 
-    # inbound shipping
-    inbound = intersect(incident(acs, v, (:s_e, :tgt)), incident(acs, p, :s_p))
-
-    # outbound shipping
-    outbound = intersect(incident(acs, v, (:s_e, :src)), incident(acs, p, :s_p))
-
-    @constraint(
-        model,
-        acs[i, :s] + 
-            sum(acs[inbound, :x], init=zero(JuMP.VariableRef)) - 
-            sum(acs[outbound, :x], init=zero(JuMP.VariableRef)) == acs[i, :demand]
-    )    
-end
+format_output(multinet2)
